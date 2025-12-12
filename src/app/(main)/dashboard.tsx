@@ -1,11 +1,10 @@
 /**
- * Dashboard - Electric Minimal Aesthetic
+ * Dashboard Screen - Electric Minimal Aesthetic
  * 
- * A vibrant, sophisticated interface with:
- * - Deep, multi-layered background mesh
- * - "Electric" Focus Hero card with gradient borders
- * - Richer Bento cards with glassmorphism
- * - Floating stats with subtle glows
+ * The main hub of the application. Displays a high-level overview of the user's day,
+ * including focus time, active tasks, streaks, and quick navigation to core features.
+ * 
+ * @module Dashboard
  */
 import React, { useCallback, useState, useMemo } from 'react';
 import {
@@ -15,8 +14,6 @@ import {
   ScrollView,
   RefreshControl,
   Pressable,
-  Dimensions,
-  Platform,
 } from 'react-native';
 import Animated, {
   FadeInDown,
@@ -27,7 +24,7 @@ import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 
-import ProgressRing from '@/components/common/ProgressRing';
+// Hooks & State
 import { useTasks } from '@/hooks/useTasks';
 import { useAuth } from '@/hooks/useAuth';
 import { useAppSelector } from '@/store';
@@ -38,14 +35,21 @@ import {
 } from '@/store/selectors';
 import { selectGlobalStreak } from '@/store/slices/analyticsSlice';
 import { selectStreaksEnabled, selectNotesEnabled } from '@/store/slices/capabilitiesSlice';
+
+// Components
+import ProgressRing from '@/components/common/ProgressRing'; // Kept if needed, though unused in this specific view currently
+import BentoCard from '@/components/dashboard/BentoCard';
+import StatItem from '@/components/dashboard/StatItem';
+import TaskItem from '@/components/dashboard/TaskItem';
+
+// Theme
 import { colors } from '@/theme/colors';
 import { spacing, radii } from '@/theme/spacing';
-import { typography } from '@/theme/typography';
-import type { Todo } from '@/types/database';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-
-// Time-based greeting
+/**
+ * Returns a greeting based on the current hour of the day.
+ * @returns {string} One of "Good morning", "Good afternoon", "Good evening", or "Good night".
+ */
 const getGreeting = (): string => {
   const hour = new Date().getHours();
   if (hour < 5) return 'Good night';
@@ -55,163 +59,68 @@ const getGreeting = (): string => {
   return 'Good night';
 };
 
+/**
+ * Returns the current date formatted as "DAY, MONTH DATE".
+ * @returns {string} Formatted date string (e.g., "FRIDAY, DEC 12").
+ */
 const getDateString = (): string => {
   const date = new Date();
   return date.toLocaleDateString('en-US', { weekday: 'long', day: 'numeric', month: 'short' }).toUpperCase();
 };
 
-// Bento Grid Card with Richer Glass
-const BentoCard = ({
-  children,
-  style,
-  onPress,
-  title,
-  icon,
-  accent = false,
-  height,
-  colSpan = 1,
-}: {
-  children?: React.ReactNode;
-  style?: any;
-  onPress?: () => void;
-  title?: string;
-  icon?: keyof typeof Ionicons.glyphMap;
-  accent?: boolean;
-  height?: number;
-  colSpan?: 1 | 2;
-}) => {
-  // Surface Gradient: Richer glass effect
-  const surfaceGradient = ['rgba(255,255,255,0.08)', 'rgba(255,255,255,0.02)'];
-
-  // Accent Gradient: Pearl/Metallic for active states
-  const accentGradient = ['#FFFFFF', '#E0E0E0'];
-
-  const content = (
-    <View style={[
-      styles.bentoCardContainer,
-      height ? { height } : undefined,
-      colSpan === 2 ? { width: '100%' } : { flex: 1 },
-      style
-    ]}>
-      <LinearGradient
-        colors={accent ? accentGradient as any : surfaceGradient as any}
-        style={StyleSheet.absoluteFill}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 0, y: 1 }}
-      />
-
-      <View style={styles.bentoContent}>
-        {(title || icon) && (
-          <View style={styles.bentoHeader}>
-            {icon && (
-              <View style={[
-                styles.iconContainer,
-                accent ? { backgroundColor: 'rgba(0,0,0,0.1)' } : { backgroundColor: 'rgba(255,255,255,0.05)' }
-              ]}>
-                <Ionicons
-                  name={icon}
-                  size={18}
-                  color={accent ? colors.dark.background : colors.dark.textSecondary}
-                />
-              </View>
-            )}
-            {title && (
-              <Text style={[
-                styles.bentoTitle,
-                accent && styles.bentoTitleAccent
-              ]}>{title}</Text>
-            )}
-          </View>
-        )}
-        {children}
-      </View>
-    </View>
-  );
-
-  if (onPress) {
-    return (
-      <Pressable
-        onPress={onPress}
-        style={({ pressed }) => [
-          colSpan === 2 ? { width: '100%' } : { flex: 1 },
-          pressed && { opacity: 0.9, transform: [{ scale: 0.99 }] }
-        ]}
-      >
-        {content}
-      </Pressable>
-    );
-  }
-  return content;
-};
-
-// Stat Item (Transparent with Glow)
-const StatItem = ({ value, label }: { value: string | number; label: string }) => (
-  <View style={styles.statItem}>
-    <Text style={styles.statValue}>{value}</Text>
-    <Text style={styles.statLabel}>{label}</Text>
-  </View>
-);
-
-// Task Item Component
-const TaskItem = ({
-  title,
-  completed,
-  priority,
-  index,
-}: {
-  title: string;
-  completed: boolean;
-  priority: 'high' | 'medium' | 'low' | null;
-  index: number;
-}) => {
-  return (
-    <Animated.View
-      entering={FadeInDown.delay(index * 50).duration(300)}
-      style={styles.taskItem}
-    >
-      <View style={[styles.taskCheckbox, completed && styles.taskCheckboxDone]}>
-        {completed && <Ionicons name="checkmark" size={10} color="#000" />}
-      </View>
-      <Text style={[styles.taskTitle, completed && styles.taskTitleDone]} numberOfLines={1}>
-        {title}
-      </Text>
-    </Animated.View>
-  );
-};
-
+/**
+ * Dashboard Component
+ * 
+ * Renders the primary user interface with a bento-grid layout.
+ * Optimized for performance using memoized selectors and callbacks.
+ */
 const Dashboard = () => {
   const insets = useSafeAreaInsets();
+
+  // Auth & Profile
   const { profile } = useAuth();
+
+  // Tasks Data
   const { todaysTodos, stats, refresh } = useTasks();
+
+  // Redux Selectors (Memoized internally by Redux, but good to be aware of)
   const focusMinutes = useAppSelector(selectTodaysFocusMinutes);
-  const focusSessions = useAppSelector(selectTodaysSessions);
   const todaysJournal = useAppSelector(selectTodaysEntry);
   const journalStreak = useAppSelector(selectGlobalStreak);
-  const streaksEnabled = useAppSelector(selectStreaksEnabled);
   const notesEnabled = useAppSelector(selectNotesEnabled);
+
   const [refreshing, setRefreshing] = useState(false);
 
-  const firstName = (profile?.display_name || profile?.username || 'there').split(' ')[0];
+  // Derived State
+  const firstName = useMemo(() =>
+    (profile?.display_name || profile?.username || 'there').split(' ')[0],
+    [profile]);
+
   const greeting = useMemo(() => getGreeting(), []);
   const dateString = useMemo(() => getDateString(), []);
+  const remainingTasks = useMemo(() =>
+    stats.todayTotal - stats.todayCompleted,
+    [stats]);
 
+  /**
+   * Handles the pull-to-refresh action.
+   */
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     await refresh();
     setRefreshing(false);
   }, [refresh]);
 
-  // Navigation handlers
-  const handleFocus = () => router.push('/(main)/focus');
-  const handleTasks = () => router.push('/(main)/tasks');
-  const handleJournal = () => router.push('/(main)/journal');
-  const handleHabits = () => router.push('/(main)/habits');
-  const handleAnalytics = () => router.push('/(main)/analytics');
-  const handleSchedule = () => router.push('/(main)/schedule' as any);
-  const handleSettings = () => router.push('/(main)/settings');
-  const handleNotes = () => router.push('/(main)/notes');
-
-  const remainingTasks = stats.todayTotal - stats.todayCompleted;
+  // Navigation Handlers (Memoized to prevent prop recreation for child components)
+  const handleFocus = useCallback(() => router.push('/(main)/focus'), []);
+  const handleTasks = useCallback(() => router.push('/(main)/tasks'), []);
+  const handleJournal = useCallback(() => router.push('/(main)/journal'), []);
+  const handleHabits = useCallback(() => router.push('/(main)/habits'), []);
+  const handleAnalytics = useCallback(() => router.push('/(main)/analytics'), []);
+  const handleSchedule = useCallback(() => router.push('/(main)/schedule' as any), []);
+  const handleSettings = useCallback(() => router.push('/(main)/settings'), []);
+  const handleNotes = useCallback(() => router.push('/(main)/notes'), []);
+  const handleStreak = useCallback(() => router.push('/streak'), []);
 
   return (
     <View style={styles.container}>
@@ -257,7 +166,7 @@ const Dashboard = () => {
             <Text style={styles.dateText}>{dateString}</Text>
             <View style={{ flexDirection: 'row', gap: 12 }}>
               <Pressable
-                onPress={() => router.push('/streak')}
+                onPress={handleStreak}
                 style={[
                   styles.settingsBtn,
                   {
@@ -292,7 +201,7 @@ const Dashboard = () => {
           </Text>
         </Animated.View>
 
-        {/* Floating Stats */}
+        {/* Floating Stats Row */}
         <Animated.View entering={FadeInDown.delay(100).duration(500)} style={styles.statsRow}>
           <StatItem value={stats.todayCompleted} label="Completed" />
           <View style={styles.statDivider} />
@@ -448,7 +357,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
   },
 
-  // Header
+  // Header Styles
   header: {
     marginBottom: spacing.xl,
   },
@@ -491,32 +400,12 @@ const styles = StyleSheet.create({
     lineHeight: 26,
   },
 
-  // Stats
+  // Stats Styles
   statsRow: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: spacing.xxl,
     paddingHorizontal: spacing.xs,
-  },
-  statItem: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    gap: 6,
-  },
-  statValue: {
-    fontSize: 26,
-    fontFamily: 'Inter_700Bold',
-    color: colors.dark.text,
-    letterSpacing: -0.8,
-    textShadowColor: 'rgba(255,255,255,0.1)',
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 10,
-  },
-  statLabel: {
-    fontSize: 14,
-    fontFamily: 'Inter_500Medium',
-    color: colors.dark.textTertiary,
-    letterSpacing: 0.1,
   },
   statDivider: {
     width: 1,
@@ -525,12 +414,10 @@ const styles = StyleSheet.create({
     marginHorizontal: spacing.lg,
   },
 
-  // Section
+  // Focus Section Styles
   section: {
     marginBottom: spacing.lg,
   },
-
-  // Focus Hero
   focusHero: {
     height: 100,
     borderRadius: radii.xl,
@@ -576,7 +463,7 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
 
-  // Bento Grid
+  // Bento Grid Layout Styles
   bentoGrid: {
     gap: spacing.md,
   },
@@ -588,75 +475,11 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: spacing.md,
   },
-  bentoCardContainer: {
-    borderRadius: radii.xl,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-    overflow: 'hidden',
-    backgroundColor: 'rgba(255,255,255,0.02)',
-  },
-  bentoContent: {
-    flex: 1,
-    padding: spacing.md,
-  },
-  bentoHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    marginBottom: spacing.md,
-  },
-  iconContainer: {
-    width: 28,
-    height: 28,
-    borderRadius: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  bentoTitle: {
-    fontSize: 14,
-    fontFamily: 'Inter_600SemiBold',
-    color: colors.dark.textSecondary,
-    letterSpacing: 0.1,
-  },
-  bentoTitleAccent: {
-    color: colors.dark.background,
-  },
 
-  // Task List in Bento
+  // Task List Styles (Specific to Dashboard view)
   taskList: {
     gap: spacing.sm,
     paddingBottom: spacing.sm,
-  },
-  taskItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingVertical: 4,
-  },
-  taskCheckbox: {
-    width: 16,
-    height: 16,
-    borderRadius: 5,
-    borderWidth: 1.5,
-    borderColor: colors.dark.textTertiary,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  taskCheckboxDone: {
-    backgroundColor: colors.dark.text,
-    borderColor: colors.dark.text,
-  },
-  taskTitle: {
-    fontSize: 14,
-    fontFamily: 'Inter_500Medium',
-    color: colors.dark.text,
-    flex: 1,
-    letterSpacing: -0.2,
-  },
-  taskTitleDone: {
-    color: colors.dark.textTertiary,
-    textDecorationLine: 'line-through',
-    opacity: 0.5,
   },
   emptyText: {
     ...typography.caption,
@@ -671,7 +494,7 @@ const styles = StyleSheet.create({
     opacity: 0.8,
   },
 
-  // Mini Stat
+  // Mini Stat (Journal/Habit cards)
   miniStat: {
     flex: 1,
     justifyContent: 'center',
@@ -683,7 +506,7 @@ const styles = StyleSheet.create({
     letterSpacing: -0.3,
   },
 
-  // Card Label
+  // General Card Label
   cardLabel: {
     fontSize: 13,
     fontFamily: 'Inter_600SemiBold',

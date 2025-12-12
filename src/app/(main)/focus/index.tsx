@@ -1,11 +1,27 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, Modal } from 'react-native';
+/**
+ * Focus Screen - Deep Work Timer
+ * 
+ * The core productivity interface of Momentum.
+ * Features:
+ * - Pomodoro timer with work/break cycles
+ * - Custom duration settings
+ * - Session tracking and history
+ * - Immersive "Zen" mode with minimal distractions
+ * 
+ * @module FocusScreen
+ */
+import React, { useState, useCallback, useMemo } from 'react';
+import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+import Animated from 'react-native-reanimated';
 
+// Components
 import PomodoroTimer from '@/components/focus/PomodoroTimer';
+import TimerSettingsModal from '@/components/focus/TimerSettingsModal';
+
+// Redux & State
 import { useAppSelector, useAppDispatch } from '@/store';
 import {
   selectActiveSession,
@@ -14,19 +30,26 @@ import {
   selectPomodoroSettings,
   selectSetsCompleted,
 } from '@/store/selectors';
-import { startSession, completeSession } from '@/store/slices/pomodoroSlice';
+import { startSession } from '@/store/slices/pomodoroSlice';
 import {
   setPomodoroFocusDuration,
   setPomodoroShortBreakDuration,
   setPomodoroLongBreakDuration
 } from '@/store/slices/settingsSlice';
-import { colors } from '@/theme/colors';
-import { spacing, radii } from '@/theme/spacing';
-import { typography } from '@/theme/typography';
 import type { PomodoroSession } from '@/types/database';
 
+// Theme
+import { colors } from '@/theme/colors';
+import { spacing, radii } from '@/theme/spacing';
+
+/**
+ * Type definition for different session modes.
+ */
 type SessionType = 'focus' | 'short_break' | 'long_break';
 
+/**
+ * Configuration object for a session option card.
+ */
 interface SessionOption {
   type: SessionType;
   label: string;
@@ -35,15 +58,27 @@ interface SessionOption {
   gradient: string[];
 }
 
+/**
+ * FocusScreen Component
+ * 
+ * Renders the Pomodoro timer interface and session history.
+ * Optimized to prevent crashes on Android by avoiding complex entry animations.
+ */
 const FocusScreen = () => {
   const insets = useSafeAreaInsets();
   const dispatch = useAppDispatch();
+
+  // Selectors
   const activeSession = useAppSelector(selectActiveSession);
   const todaysSessions = useAppSelector(selectTodaysSessions);
   const focusMinutes = useAppSelector(selectTodaysFocusMinutes);
   const settings = useAppSelector(selectPomodoroSettings);
   const setsCompletedRaw = useAppSelector(selectSetsCompleted);
+
+  // Ensure setsCompleted is a valid number
   const setsCompleted = Number.isFinite(Number(setsCompletedRaw)) ? Number(setsCompletedRaw) : 0;
+
+  // Local State
   const [showSettings, setShowSettings] = useState(false);
   const [tempSettings, setTempSettings] = useState({
     focusDuration: settings.focusDuration,
@@ -51,7 +86,8 @@ const FocusScreen = () => {
     longBreakDuration: settings.longBreakDuration,
   });
 
-  const sessionOptions: SessionOption[] = [
+  // Memoized Session Options to prevent recreation on every render
+  const sessionOptions = useMemo<SessionOption[]>(() => [
     {
       type: 'focus',
       label: 'Focus',
@@ -73,9 +109,12 @@ const FocusScreen = () => {
       icon: 'leaf',
       gradient: [colors.dark.warning + '33', colors.dark.warning + '1A'],
     },
-  ];
+  ], [settings.focusDuration, settings.shortBreakDuration, settings.longBreakDuration]);
 
-  const handleSelectSession = (option: SessionOption) => {
+  /**
+   * Starts a new session based on the selected option.
+   */
+  const handleSelectSession = useCallback((option: SessionOption) => {
     if (!activeSession) {
       dispatch(
         startSession({
@@ -84,22 +123,30 @@ const FocusScreen = () => {
         })
       );
     }
-  };
+  }, [activeSession, dispatch, settings.shortBreakDuration]);
 
-  const handleSaveSettings = () => {
+  /**
+   * Persists changes made in the settings modal to the Redux store.
+   */
+  const handleSaveSettings = useCallback(() => {
     dispatch(setPomodoroFocusDuration(tempSettings.focusDuration));
     dispatch(setPomodoroShortBreakDuration(tempSettings.shortBreakDuration));
     dispatch(setPomodoroLongBreakDuration(tempSettings.longBreakDuration));
     setShowSettings(false);
-  };
+  }, [dispatch, tempSettings]);
 
-  const adjustDuration = (key: 'focusDuration' | 'shortBreakDuration' | 'longBreakDuration', delta: number) => {
+  /**
+   * Updates temporary state for settings adjustments.
+   * Clamped between 1 and 120 minutes.
+   */
+  const adjustDuration = useCallback((key: 'focusDuration' | 'shortBreakDuration' | 'longBreakDuration', delta: number) => {
     setTempSettings(prev => ({
       ...prev,
       [key]: Math.max(1, Math.min(120, prev[key] + delta)),
     }));
-  };
+  }, []);
 
+  // Derived calculations for progress
   const focusGoalMinutes = 120;
   const focusProgress = Math.min(focusMinutes / focusGoalMinutes, 1);
   const focusHours = Math.floor(focusMinutes / 60);
@@ -249,86 +296,13 @@ const FocusScreen = () => {
       </ScrollView>
 
       {/* Settings Modal */}
-      <Modal
+      <TimerSettingsModal
         visible={showSettings}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowSettings(false)}
-      >
-        <Pressable style={styles.modalOverlay} onPress={() => setShowSettings(false)}>
-          <Pressable style={styles.modalContent} onPress={(e) => e.stopPropagation()}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Timer Settings</Text>
-              <Pressable onPress={() => setShowSettings(false)} hitSlop={12}>
-                <Ionicons name="close" size={24} color={colors.dark.textSecondary} />
-              </Pressable>
-            </View>
-
-            <View style={styles.settingsSection}>
-              <View style={styles.settingItem}>
-                <Text style={styles.settingLabel}>Focus Duration</Text>
-                <View style={styles.settingControl}>
-                  <Pressable
-                    onPress={() => adjustDuration('focusDuration', -5)}
-                    style={styles.settingButton}
-                  >
-                    <Ionicons name="remove" size={20} color={colors.dark.text} />
-                  </Pressable>
-                  <Text style={styles.settingValue}>{tempSettings.focusDuration} min</Text>
-                  <Pressable
-                    onPress={() => adjustDuration('focusDuration', 5)}
-                    style={styles.settingButton}
-                  >
-                    <Ionicons name="add" size={20} color={colors.dark.text} />
-                  </Pressable>
-                </View>
-              </View>
-
-              <View style={styles.settingItem}>
-                <Text style={styles.settingLabel}>Short Break</Text>
-                <View style={styles.settingControl}>
-                  <Pressable
-                    onPress={() => adjustDuration('shortBreakDuration', -1)}
-                    style={styles.settingButton}
-                  >
-                    <Ionicons name="remove" size={20} color={colors.dark.text} />
-                  </Pressable>
-                  <Text style={styles.settingValue}>{tempSettings.shortBreakDuration} min</Text>
-                  <Pressable
-                    onPress={() => adjustDuration('shortBreakDuration', 1)}
-                    style={styles.settingButton}
-                  >
-                    <Ionicons name="add" size={20} color={colors.dark.text} />
-                  </Pressable>
-                </View>
-              </View>
-
-              <View style={styles.settingItem}>
-                <Text style={styles.settingLabel}>Long Break</Text>
-                <View style={styles.settingControl}>
-                  <Pressable
-                    onPress={() => adjustDuration('longBreakDuration', -5)}
-                    style={styles.settingButton}
-                  >
-                    <Ionicons name="remove" size={20} color={colors.dark.text} />
-                  </Pressable>
-                  <Text style={styles.settingValue}>{tempSettings.longBreakDuration} min</Text>
-                  <Pressable
-                    onPress={() => adjustDuration('longBreakDuration', 5)}
-                    style={styles.settingButton}
-                  >
-                    <Ionicons name="add" size={20} color={colors.dark.text} />
-                  </Pressable>
-                </View>
-              </View>
-            </View>
-
-            <Pressable onPress={handleSaveSettings} style={styles.saveButton}>
-              <Text style={styles.saveButtonText}>Save Settings</Text>
-            </Pressable>
-          </Pressable>
-        </Pressable>
-      </Modal>
+        onClose={() => setShowSettings(false)}
+        onSave={handleSaveSettings}
+        tempSettings={tempSettings}
+        onAdjust={adjustDuration}
+      />
     </View>
   );
 };
@@ -550,85 +524,6 @@ const styles = StyleSheet.create({
     letterSpacing: 1.5,
     marginBottom: spacing.md,
     opacity: 0.6,
-  },
-  // Modal styles
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.7)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: spacing.lg,
-  },
-  modalContent: {
-    width: '100%',
-    maxWidth: 400,
-    backgroundColor: colors.dark.surface,
-    borderRadius: radii.xxl,
-    padding: spacing.xl,
-    borderWidth: 1,
-    borderColor: colors.dark.border,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing.lg,
-  },
-  modalTitle: {
-    fontSize: 22,
-    fontFamily: 'Inter_700Bold',
-    color: colors.dark.text,
-    letterSpacing: -0.5,
-  },
-  settingsSection: {
-    gap: spacing.lg,
-    marginBottom: spacing.xl,
-  },
-  settingItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  settingLabel: {
-    fontSize: 16,
-    fontFamily: 'Inter_500Medium',
-    color: colors.dark.text,
-    letterSpacing: -0.2,
-  },
-  settingControl: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-  },
-  settingButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(255,255,255,0.04)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  settingValue: {
-    fontSize: 16,
-    fontFamily: 'Inter_700Bold',
-    color: colors.dark.text,
-    minWidth: 60,
-    textAlign: 'center',
-    letterSpacing: -0.3,
-  },
-  saveButton: {
-    backgroundColor: colors.dark.text,
-    paddingVertical: spacing.md,
-    borderRadius: radii.lg,
-    alignItems: 'center',
-  },
-  saveButtonText: {
-    fontSize: 16,
-    fontFamily: 'Inter_600SemiBold',
-    color: colors.dark.background,
-    letterSpacing: -0.2,
   },
 });
 

@@ -1,46 +1,71 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 import { ThemeMode } from '@/theme';
 
-// Haptic feedback levels
+/**
+ * Haptic feedback intensity levels.
+ * - 'full': Standard system haptics.
+ * - 'reduced': Softer, less frequent haptics.
+ * - 'off': No haptic feedback.
+ */
 export type HapticLevel = 'full' | 'reduced' | 'off';
 
-// Timeblock view style
+/**
+ * Visual style for the Schedule/Timeblock view.
+ */
 export type TimeblockViewStyle = 'calendar' | 'list';
 
-// Notification settings
+/**
+ * Configuration interface for application notifications.
+ */
 interface NotificationSettings {
+  /** Master switch for all notifications */
   enabled: boolean;
+  /** Alerts when a focus session triggers a break/work switch */
   pomodoroAlerts: boolean;
+  /** Daily reminder to wind down */
   bedtimeReminder: boolean;
+  /** Reminder to maintain daily streak */
   streakReminder: boolean;
+  /** Reminders for overdue or scheduled tasks */
   todoReminders: boolean;
+  /** Social features (future) */
   friendEncouragements: boolean;
+  /** Whether DND mode is active during specified hours */
   quietHoursEnabled: boolean;
-  quietHoursStart: string; // HH:MM format
-  quietHoursEnd: string;   // HH:MM format
+  /** Start time for quiet hours (HH:MM) */
+  quietHoursStart: string;
+  /** End time for quiet hours (HH:MM) */
+  quietHoursEnd: string;
 }
 
-// App settings state
+/**
+ * Interface defining the Redux state for user settings.
+ */
 interface SettingsState {
   // Appearance
+  /** Current app theme mode (light/dark/system) */
   theme: ThemeMode;
 
   // Accessibility
+  /** Reduces animations throughout the app */
   reducedMotion: boolean;
+  /** Intensity of haptic feedback */
   hapticLevel: HapticLevel;
+  /** Increases base font size */
   largeText: boolean;
+  /** Increases contrast for better readability */
   highContrast: boolean;
 
   // Notifications
   notifications: NotificationSettings;
 
-  // Pomodoro defaults (flat)
+  // Pomodoro defaults (Legacy/Flat structure - kept for backward compat)
   defaultFocusMinutes: number;
   defaultBreakMinutes: number;
   autoStartBreak: boolean;
   autoStartNextPomodoro: boolean;
 
-  // Pomodoro nested for convenience (computed getter would be ideal, but we'll duplicate)
+  // Pomodoro Settings (Nested structure)
   pomodoro: {
     focusDuration: number;
     shortBreakDuration: number;
@@ -74,7 +99,7 @@ interface SettingsState {
 }
 
 const initialState: SettingsState = {
-  // Appearance - dark by default
+  // Appearance - dark by default for OLED savings
   theme: 'dark',
 
   // Accessibility
@@ -135,6 +160,12 @@ const initialState: SettingsState = {
   lastAppVersion: null,
 };
 
+/**
+ * settingsSlice
+ * 
+ * Manages global application settings including theme, notifications, pomodoro configuration,
+ * and user preferences. Persisted via Redux Persist.
+ */
 const settingsSlice = createSlice({
   name: 'settings',
   initialState,
@@ -174,6 +205,7 @@ const settingsSlice = createSlice({
     setDefaultPomodoro(state, action: PayloadAction<{ focus: number; break: number }>) {
       state.defaultFocusMinutes = action.payload.focus;
       state.defaultBreakMinutes = action.payload.break;
+      // Sync with nested structure
       state.pomodoro.focusDuration = action.payload.focus;
       state.pomodoro.shortBreakDuration = action.payload.break;
     },
@@ -189,11 +221,11 @@ const settingsSlice = createSlice({
     // Pomodoro nested setters
     setPomodoroFocusDuration(state, action: PayloadAction<number>) {
       state.pomodoro.focusDuration = action.payload;
-      state.defaultFocusMinutes = action.payload;
+      state.defaultFocusMinutes = action.payload; // Keep synced
     },
     setPomodoroShortBreakDuration(state, action: PayloadAction<number>) {
       state.pomodoro.shortBreakDuration = action.payload;
-      state.defaultBreakMinutes = action.payload;
+      state.defaultBreakMinutes = action.payload; // Keep synced
     },
     setPomodoroLongBreakDuration(state, action: PayloadAction<number>) {
       state.pomodoro.longBreakDuration = action.payload;
