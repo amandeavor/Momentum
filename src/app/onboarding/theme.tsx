@@ -26,7 +26,7 @@ export default function ThemeScreen() {
 
   const handleContinue = () => {
     // TODO: Save theme preference
-    router.push({ pathname: '/onboarding/quick-preferences', params: { selfControl: params.selfControl ?? '0' } });
+    router.push({ pathname: '/onboarding/quick-preferences' });
   };
 
   const ThemeCard = ({ type, label, icon }: { type: ThemeOption; label: string; icon: string }) => {

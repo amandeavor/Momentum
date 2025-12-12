@@ -18,12 +18,11 @@ import Button from '@/components/common/Button';
 
 export default function CapabilitiesScreen() {
   const insets = useSafeAreaInsets();
-  
+
   const [features, setFeatures] = useState({
     journaling: true,
     notes: true,
     streaks: true,
-    selfControl: false,
   });
 
   const toggleFeature = (key: keyof typeof features) => {
@@ -32,7 +31,7 @@ export default function CapabilitiesScreen() {
 
   const handleContinue = () => {
     // TODO: Save feature preferences
-    router.push({ pathname: '/onboarding/theme', params: { selfControl: features.selfControl ? '1' : '0' } }); 
+    router.push({ pathname: '/onboarding/theme' });
   };
 
   const CoreFeature = ({ icon, title, description }: { icon: string; title: string; description: string }) => (
@@ -68,22 +67,22 @@ export default function CapabilitiesScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Core capabilities (always on)</Text>
           <View style={styles.card}>
-            <CoreFeature 
-              icon="timer-outline" 
-              title="Focus sessions (Pomodoro)" 
-              description="Deep work timers with custom durations and breaks." 
+            <CoreFeature
+              icon="timer-outline"
+              title="Focus sessions (Pomodoro)"
+              description="Deep work timers with custom durations and breaks."
             />
             <View style={styles.divider} />
-            <CoreFeature 
-              icon="calendar-outline" 
-              title="Timeblocks for your day" 
-              description="Plan tomorrow in advance so you know exactly what to do." 
+            <CoreFeature
+              icon="calendar-outline"
+              title="Timeblocks for your day"
+              description="Plan tomorrow in advance so you know exactly what to do."
             />
             <View style={styles.divider} />
-            <CoreFeature 
-              icon="checkbox-outline" 
-              title="Smart todos" 
-              description="Small tasks with time-based reminders." 
+            <CoreFeature
+              icon="checkbox-outline"
+              title="Smart todos"
+              description="Small tasks with time-based reminders."
             />
           </View>
         </View>
@@ -91,7 +90,7 @@ export default function CapabilitiesScreen() {
         {/* Optional Features */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Turn extras on or off</Text>
-          
+
           <View style={styles.card}>
             <View style={styles.toggleRow}>
               <View style={styles.toggleInfo}>
@@ -136,20 +135,6 @@ export default function CapabilitiesScreen() {
               />
             </View>
 
-            <View style={styles.divider} />
-
-            <View style={styles.toggleRow}>
-              <View style={styles.toggleInfo}>
-                <Text style={styles.toggleLabel}>Self-control mode</Text>
-                <Text style={styles.toggleHelper}>Private tools for handling urges, streak tracking and breathing exercises.</Text>
-              </View>
-              <Switch
-                value={features.selfControl}
-                onValueChange={() => toggleFeature('selfControl')}
-                trackColor={{ false: colors.dark.surface, true: colors.primary }}
-                thumbColor={Platform.OS === 'ios' ? '#fff' : features.selfControl ? '#fff' : '#f4f3f4'}
-              />
-            </View>
             <Text style={styles.helperSmall}>Off by default. You can enable this later in settings.</Text>
           </View>
         </View>

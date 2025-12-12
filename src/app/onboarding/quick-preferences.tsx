@@ -38,19 +38,9 @@ export default function QuickPreferencesScreen() {
   const insets = useSafeAreaInsets();
   const dispatch = useAppDispatch();
   const params = useLocalSearchParams();
-  const selfControlEnabled = useMemo(() => params.selfControl === '1' || params.selfControl === 'true', [params.selfControl]);
 
-  const options = useMemo(() => {
-    if (!selfControlEnabled) return PRIORITY_OPTIONS;
-    return [
-      ...PRIORITY_OPTIONS,
-      {
-        id: 'self_control',
-        title: 'Self-control & urges',
-        description: 'Keep urges in check and track your streak privately.',
-      },
-    ];
-  }, [selfControlEnabled]);
+
+  const options = PRIORITY_OPTIONS;
 
   const [selection, setSelection] = useState<string>(options[0]?.id ?? 'focus');
 
@@ -77,7 +67,7 @@ export default function QuickPreferencesScreen() {
   };
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>      
+    <View style={[styles.container, { paddingTop: insets.top }]}>
       <ScrollView
         contentContainerStyle={[
           styles.content,

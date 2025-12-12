@@ -26,16 +26,12 @@ export default function Index() {
     );
   }
 
-  // First time user - show onboarding
-  if (isAuthenticated && !onboardingCompleted) {
-    return <Redirect href="/onboarding" />;
-  }
-
   // Route based on auth state
   if (!isAuthenticated) {
     return <Redirect href="/landing" />;
   }
 
+  // Authenticated users go straight to dashboard
   return <Redirect href="/(main)/dashboard" />;
 }
 

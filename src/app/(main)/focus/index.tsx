@@ -137,7 +137,7 @@ const FocusScreen = () => {
         showsVerticalScrollIndicator={false}
       >
         {/* Timer Section - Glowing Ring */}
-        <Animated.View entering={FadeInDown.delay(100).duration(500)} style={styles.timerSection}>
+        <Animated.View style={styles.timerSection}>
           <View style={styles.timerGlowContainer}>
             <PomodoroTimer
               workDuration={settings.focusDuration}
@@ -150,7 +150,7 @@ const FocusScreen = () => {
 
         {/* Session Types - Vibrant Glass Cards */}
         {!activeSession && (
-          <Animated.View entering={FadeInDown.delay(200).duration(500)}>
+          <Animated.View>
             <Text style={styles.sectionHeader}>Start Session</Text>
             <View style={styles.sessionGrid}>
               {/* Focus Card (Large) */}
@@ -203,7 +203,7 @@ const FocusScreen = () => {
         )}
 
         {/* Floating Stats */}
-        <Animated.View entering={FadeInDown.delay(300).duration(500)} style={styles.statsRow}>
+        <Animated.View style={styles.statsRow}>
           <View style={styles.statItem}>
             <Text style={styles.statValue}>{todaysSessions.length}</Text>
             <Text style={styles.statLabel}>Sessions</Text>
@@ -224,7 +224,7 @@ const FocusScreen = () => {
 
         {/* Recent Sessions List */}
         {todaysSessions.length > 0 && (
-          <Animated.View entering={FadeInDown.delay(400).duration(500)}>
+          <Animated.View>
             <Text style={styles.sectionHeader}>Recent</Text>
             <View style={styles.sessionsList}>
               {todaysSessions.slice(0, 5).map((session: PomodoroSession, index: number) => (
