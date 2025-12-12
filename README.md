@@ -1,24 +1,24 @@
-# Momentum 🚀
+# Momentum
 
 > **Master your time. Conquer your goals.**
 
 Momentum is a premium productivity application built with **React Native** and **Expo**. It combines task management, habit tracking, and focus timers into a single, beautiful interface designed to help you achieve peak performance.
 
-## 🌟 Features
+## Features
 
--   **✨ Omni-Note System**: Capture ideas instantly with the Quick Notes feature.
--   **🍅 Intelligent Pomodoro**: Focus better with customizable work/break intervals and haptic feedback.
--   **📊 Advanced Analytics**: Visualize your productivity with detailed charts, heatmaps, and "Peak Focus Hour" tracking.
--   **🎯 Goal & Task Management**: Organize your life with intuitive lists, deadlines, and priorities.
--   **🌙 Dark Mode First**: A stunning, battery-saving UI designed for focus.
--   **🔒 Secure & Sync**: Powered by Supabase for reliable cloud mastery.
+-   **Omni-Note System**: Capture ideas instantly with the Quick Notes feature.
+-   **Intelligent Pomodoro**: Focus better with customizable work/break intervals and haptic feedback.
+-   **Advanced Analytics**: Visualize your productivity with detailed charts, heatmaps, and "Peak Focus Hour" tracking.
+-   **Goal & Task Management**: Organize your life with intuitive lists, deadlines, and priorities.
+-   **Dark Mode First**: A stunning, battery-saving UI designed for focus.
+-   **Secure & Sync**: Powered by Supabase for reliable cloud mastery.
 
-## 📱 Download
+## Download
 
-**Version 1.0.0** is out now!
+**Version 1.2.0** is out now!
 [**Download APK**](https://expo.dev/artifacts/eas/gbv3w9ig52LKLdN65pLzBa.apk)
 
-## 🛠 Tech Stack
+## Tech Stack
 
 -   **Framework**: React Native (Expo SDK 54)
 -   **Language**: TypeScript
@@ -28,7 +28,7 @@ Momentum is a premium productivity application built with **React Native** and *
 -   **Styling**: Custom Design System (Dark/Light themes)
 -   **Build Tool**: EAS Build
 
-## 🚀 Getting Started
+## Getting Started
 
 ### Prerequisites
 -   Node.js (v18+)
@@ -57,7 +57,7 @@ Momentum is a premium productivity application built with **React Native** and *
     -   Press `a` in the terminal to open in Android Emulator.
     -   Or scan the QR code with **Expo Go**.
 
-## 🏗 Building for Production
+## Building for Production
 
 To build the APK yourself using EAS:
 
@@ -72,11 +72,11 @@ eas login
 eas build --platform android --profile apk
 ```
 
-## 🤝 Contributing
+## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
 
-## 📄 License
+## License
 
 Copyright (c) 2025 KonnichiwaAman. All rights reserved.
 Unauthorized copying, modification, distribution, or sale of this software, via any medium, is strictly prohibited.
