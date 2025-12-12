@@ -3,14 +3,25 @@ import { supabase } from '@/services/supabase';
 import { DbGoal, DbGoalInsert, DbGoalUpdate, DbMilestone, DbMilestoneInsert, DbMilestoneUpdate, GoalSession, GoalSessionInsert } from '@/types/database';
 import { RootState } from '../index';
 
+/**
+ * State definition for the Goals module.
+ */
 interface GoalsState {
+  /** List of all user goals. */
   goals: DbGoal[];
+  /** Flattened list of all milestones across all goals. */
   milestones: DbMilestone[];
+  /** Recent work sessions on goals. */
   sessions: GoalSession[];
+  /** Currently selected or active goal for detailed view. */
   currentGoal: DbGoal | null;
+  /** Loading state for fetching data. */
   loading: boolean;
+  /** Syncing state for mutations (create/update/delete). */
   syncing: boolean;
+  /** Error message if any operation fails. */
   error: string | null;
+  /** Timestamp of last successful sync. */
   lastSynced: string | null;
 }
 
@@ -29,9 +40,12 @@ const initialState: GoalsState = {
 const goalsTable = () => (supabase.from('goals') as any);
 const milestonesTable = () => (supabase.from('milestones') as any);
 
-// Async thunks
+// --- Async Thunks ---
 
-// Fetch all goals
+/**
+ * Fetches all goals and their associated milestones.
+ * Can filter by goal status (e.g., 'active', 'completed').
+ */
 export const fetchGoals = createAsyncThunk<
   { goals: DbGoal[]; milestones: DbMilestone[] },
   { status?: 'active' | 'completed' | 'paused' | 'abandoned' } | undefined,
@@ -80,7 +94,9 @@ export const fetchGoals = createAsyncThunk<
   }
 );
 
-// Create a new goal
+/**
+ * Creates a new goal.
+ */
 export const createGoalAsync = createAsyncThunk<
   DbGoal,
   Omit<DbGoalInsert, 'user_id'>,
@@ -107,7 +123,9 @@ export const createGoalAsync = createAsyncThunk<
   }
 );
 
-// Update a goal
+/**
+ * Updates an existing goal.
+ */
 export const updateGoalAsync = createAsyncThunk<
   DbGoal,
   { id: string; updates: DbGoalUpdate },
@@ -130,7 +148,9 @@ export const updateGoalAsync = createAsyncThunk<
   }
 );
 
-// Delete a goal
+/**
+ * Deletes a goal and its associated milestones (via cascade).
+ */
 export const deleteGoalAsync = createAsyncThunk<
   string,
   string,
@@ -151,7 +171,9 @@ export const deleteGoalAsync = createAsyncThunk<
   }
 );
 
-// Create a milestone
+/**
+ * Creates a new milestone for a goal.
+ */
 export const createMilestone = createAsyncThunk<
   DbMilestone,
   Omit<DbMilestoneInsert, 'user_id'>,
@@ -178,7 +200,9 @@ export const createMilestone = createAsyncThunk<
   }
 );
 
-// Update a milestone
+/**
+ * Updates a milestone.
+ */
 export const updateMilestone = createAsyncThunk<
   DbMilestone,
   { id: string; updates: DbMilestoneUpdate },
@@ -201,7 +225,10 @@ export const updateMilestone = createAsyncThunk<
   }
 );
 
-// Toggle milestone completion
+/**
+ * Toggles a milestone's completion status.
+ * Automatically recalculates and updates the parent goal's progress percentage.
+ */
 export const toggleMilestone = createAsyncThunk<
   { milestone: DbMilestone; goal: DbGoal },
   string,
@@ -265,7 +292,9 @@ export const toggleMilestone = createAsyncThunk<
   }
 );
 
-// Delete a milestone
+/**
+ * Deletes a milestone.
+ */
 export const deleteMilestone = createAsyncThunk<
   string,
   string,
@@ -286,7 +315,10 @@ export const deleteMilestone = createAsyncThunk<
   }
 );
 
-// Check in to a goal (track work session)
+/**
+ * Records a work session against a goal (Check-in).
+ * Updates an existing session if one exists for today, otherwise creates new.
+ */
 export const checkInGoal = createAsyncThunk<
   GoalSession,
   { goalId: string; durationMinutes?: number; notes?: string },
@@ -344,7 +376,10 @@ export const checkInGoal = createAsyncThunk<
   }
 );
 
-// Goals slice
+/**
+ * Goals Slice
+ * Manages state for Goals, Milestones, and Goal Sessions.
+ */
 const goalsSlice = createSlice({
   name: 'goals',
   initialState,
@@ -355,7 +390,7 @@ const goalsSlice = createSlice({
     setCurrentGoal(state, action: PayloadAction<DbGoal | null>) {
       state.currentGoal = action.payload;
     },
-    // Local-only operations for offline support
+    // Local-only operations for optimistic updates
     addGoalLocal(state, action: PayloadAction<DbGoal>) {
       state.goals.unshift(action.payload);
     },
@@ -376,7 +411,7 @@ const goalsSlice = createSlice({
       state.currentGoal = null;
       state.lastSynced = null;
     },
-    // Legacy compatibility
+    // Legacy compatibility actions
     fetchGoalsStart(state) {
       state.loading = true;
       state.error = null;
@@ -542,10 +577,10 @@ export const {
 
 export default goalsSlice.reducer;
 
-// Base selectors
+// --- Selectors ---
+
 const selectGoalsState = (state: RootState) => state.goals;
 
-// Memoized selectors
 export const selectAllGoals = createSelector(
   [selectGoalsState],
   (goalsState) => goalsState.goals
@@ -581,21 +616,30 @@ export const selectAllMilestones = createSelector(
   (goalsState) => goalsState.milestones
 );
 
-// Get goal by ID
+/**
+ * Gets a specific goal by ID.
+ * Memoized.
+ */
 export const selectGoalById = (goalId: string) =>
   createSelector(
     [selectAllGoals],
     (goals) => goals.find(g => g.id === goalId)
   );
 
-// Get milestones for a goal
+/**
+ * Gets all milestones associated with a specific goal ID.
+ * Memoized.
+ */
 export const selectMilestonesByGoalId = (goalId: string) =>
   createSelector(
     [selectAllMilestones],
     (milestones) => milestones.filter(m => m.goal_id === goalId)
   );
 
-// Get goal progress (calculated from milestones)
+/**
+ * Calculates percentage progress for a goal based on its milestones.
+ * Returns a number between 0 and 100.
+ */
 export const selectGoalProgress = (goalId: string) =>
   createSelector(
     [selectAllMilestones],

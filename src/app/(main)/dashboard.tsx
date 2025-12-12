@@ -45,6 +45,7 @@ import TaskItem from '@/components/dashboard/TaskItem';
 // Theme
 import { colors } from '@/theme/colors';
 import { spacing, radii } from '@/theme/spacing';
+import { typography } from '@/theme/typography';
 
 /**
  * Returns a greeting based on the current hour of the day.

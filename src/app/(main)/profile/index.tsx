@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -9,14 +9,15 @@ import {
   Image,
   Modal,
   TextInput,
+  Animated,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+import AnimatedReanimated, { FadeInDown } from 'react-native-reanimated';
 
 import AvatarPicker from '@/components/common/AvatarPicker';
+import TimePickerModal from '@/components/common/TimePickerModal';
 import { useAuth } from '@/hooks/useAuth';
 import { useHaptics } from '@/hooks/useHaptics';
 import { useAppSelector, useAppDispatch } from '@/store';
@@ -24,47 +25,61 @@ import {
   selectSettings,
   setTheme,
   setHapticLevel,
+  setNotificationsEnabled,
+  setPomodoroFocusDuration,
+  setPomodoroShortBreakDuration,
+  setPomodoroAutoStartBreaks,
+  setBedtime,
 } from '@/store/slices/settingsSlice';
 import {
-  selectTodosStats,
-  selectJournalStreak,
-  selectPomodoroHistory,
-} from '@/store/selectors';
+  selectCapabilities,
+  fetchCapabilities,
+  toggleCapability,
+} from '@/store/slices/capabilitiesSlice';
 import { colors } from '@/theme/colors';
 import { spacing, radii } from '@/theme/spacing';
 import { typography } from '@/theme/typography';
 
-// Preset avatar colors
-const PRESET_AVATARS: Record<string, string[]> = {
-  gradient1: ['#8fcfff', '#c4b5fd'],
-  gradient2: ['#ffb3c7', '#fcd5b5'],
-};
-
 const ProfileScreen = () => {
   const insets = useSafeAreaInsets();
   const dispatch = useAppDispatch();
-  const { session, profile, signOut, loading } = useAuth();
+  const { session, profile, signOut, isAnonymous: authIsAnonymous, updateUserProfile } = useAuth();
   const settings = useAppSelector(selectSettings);
+  const capabilities = useAppSelector(selectCapabilities);
   const haptics = useHaptics();
-  const taskStats = useAppSelector(selectTodosStats);
-  const journalStreak = useAppSelector(selectJournalStreak);
-  const journalEntries = useAppSelector(state => state.journal?.entries || []);
-  const pomodoroHistory = useAppSelector(selectPomodoroHistory);
 
   const [showAvatarPicker, setShowAvatarPicker] = useState(false);
   const [showEditProfile, setShowEditProfile] = useState(false);
+  const [showBedtimePicker, setShowBedtimePicker] = useState(false);
   const [avatarUri, setAvatarUri] = useState<string | null>(profile?.avatar_url || null);
   const [editName, setEditName] = useState(profile?.display_name || '');
 
-  const totalFocusMinutes = pomodoroHistory.reduce(
-    (total, session) => total + session.duration_minutes,
-    0
-  );
-  const totalFocusHours = Math.floor(totalFocusMinutes / 60);
+  // Fetch capabilities on mount
+  useEffect(() => {
+    dispatch(fetchCapabilities());
+  }, [dispatch]);
 
-  const isAnonymous = !profile?.username;
-  const displayName = profile?.display_name || profile?.username || 'Guest';
+  // Sync editName when profile changes
+  useEffect(() => {
+    if (profile?.display_name) {
+      setEditName(profile.display_name);
+    }
+  }, [profile?.display_name]);
+
+  // Use auth hook's isAnonymous or fallback to checking if user has no email
+  const isAnonymous = authIsAnonymous || !session?.user?.email;
+  const displayName = profile?.display_name || profile?.username || session?.user?.email?.split('@')[0] || 'Guest';
   const initials = displayName.charAt(0).toUpperCase();
+
+  const FOCUS_DURATIONS = [15, 25, 30, 45, 60];
+  const BREAK_DURATIONS = [5, 10, 15];
+
+  const formatBedtime = (time: string) => {
+    const [h, m] = time.split(':').map(Number);
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    const displayH = h % 12 || 12;
+    return `${displayH}:${m.toString().padStart(2, '0')} ${ampm}`;
+  };
 
   const handleSignOut = () => {
     Alert.alert(
@@ -81,12 +96,9 @@ const ProfileScreen = () => {
     );
   };
 
-  const handleUpgradeAccount = () => {
-    router.push('/(auth)/register');
-  };
-
-  const handleOpenSettings = () => {
-    router.push('/(main)/settings');
+  const handleProfileCardPress = () => {
+    haptics.light();
+    setShowEditProfile(true);
   };
 
   const handleAvatarSelect = (uri: string | null, type: 'preset' | 'custom') => {
@@ -94,9 +106,14 @@ const ProfileScreen = () => {
     haptics.success();
   };
 
-  const handleSaveProfile = () => {
-    setShowEditProfile(false);
-    haptics.success();
+  const handleSaveProfile = async () => {
+    try {
+      await updateUserProfile({ display_name: editName });
+      setShowEditProfile(false);
+      haptics.success();
+    } catch (error) {
+      Alert.alert('Error', 'Failed to update profile');
+    }
   };
 
   const renderAvatar = () => {
@@ -104,7 +121,6 @@ const ProfileScreen = () => {
       return <Image source={{ uri: avatarUri }} style={styles.avatarImage} />;
     }
 
-    // Default monochrome gradient for avatar
     return (
       <LinearGradient
         colors={['#ffffff', '#9ca3af']}
@@ -119,9 +135,9 @@ const ProfileScreen = () => {
 
   return (
     <View style={styles.container}>
-      {/* Hero Header */}
+      {/* Header */}
       <View style={[styles.header, { paddingTop: insets.top + spacing.md }]}>
-        <Text style={styles.pageTitle}>Profile</Text>
+        <Text style={styles.pageTitle}>Settings</Text>
       </View>
 
       <ScrollView
@@ -132,142 +148,182 @@ const ProfileScreen = () => {
         ]}
         showsVerticalScrollIndicator={false}
       >
-        {/* Profile Card */}
-        <Animated.View entering={FadeInDown.delay(100).duration(500)}>
-          <View style={styles.profileCard}>
+        {/* Profile Card - Click to Edit */}
+        <AnimatedReanimated.View entering={FadeInDown.delay(50).duration(400)}>
+          <Pressable onPress={handleProfileCardPress} style={styles.profileCard}>
             <LinearGradient
               colors={['rgba(255,255,255,0.08)', 'rgba(255,255,255,0.02)']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={styles.profileGradient}
             >
-              <View style={styles.profileHeader}>
-                <Pressable onPress={() => setShowAvatarPicker(true)} style={styles.avatarContainer}>
-                  <View style={styles.avatarGlow} />
+              <View style={styles.profileRow}>
+                <View style={styles.avatarContainer}>
                   {renderAvatar()}
-                  <View style={styles.avatarEditBadge}>
-                    <Ionicons name="camera" size={12} color="#000" />
-                  </View>
-                </Pressable>
+                </View>
                 <View style={styles.profileInfo}>
                   <Text style={styles.displayName}>{displayName}</Text>
                   <Text style={styles.email}>
-                    {profile?.username || 'Guest Account'}
+                    {session?.user?.email || 'Tap to edit profile'}
                   </Text>
                 </View>
+                <Ionicons name="chevron-forward" size={20} color={colors.dark.textTertiary} />
               </View>
 
               {isAnonymous && (
                 <View style={styles.upgradePrompt}>
-                  <Ionicons
-                    name="alert-circle-outline"
-                    size={18}
-                    color="#fff"
-                  />
+                  <Ionicons name="alert-circle-outline" size={16} color="#fbbf24" />
                   <Text style={styles.upgradeText}>
                     Create an account to sync your data
                   </Text>
                 </View>
               )}
-
-              <Pressable
-                style={styles.profileButton}
-                onPress={isAnonymous ? handleUpgradeAccount : () => setShowEditProfile(true)}
-              >
-                <LinearGradient
-                  colors={['#ffffff', '#e5e5e5']}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={styles.profileButtonGradient}
-                >
-                  <Text style={styles.profileButtonText}>
-                    {isAnonymous ? 'Create Account' : 'Edit Profile'}
-                  </Text>
-                </LinearGradient>
-              </Pressable>
             </LinearGradient>
-          </View>
-        </Animated.View>
+          </Pressable>
+        </AnimatedReanimated.View>
 
-
-
-
-
-        {/* Quick Settings Section */}
-        <Animated.View entering={FadeInDown.delay(300).duration(500)}>
-          <Text style={styles.sectionHeader}>Quick Settings</Text>
-
-          <View style={styles.bentoGrid}>
-            {/* Top Row - Large Featured Tile */}
-            <BentoTile
-              icon="settings-outline"
-              label="All Settings"
-              size="large"
-              onPress={handleOpenSettings}
-              hapticFeedback={haptics.medium}
+        {/* Features Section */}
+        <AnimatedReanimated.View entering={FadeInDown.delay(100).duration(400)}>
+          <Text style={styles.sectionHeader}>Features</Text>
+          <View style={styles.section}>
+            <SettingToggle
+              icon="document-text"
+              label="Quick Notes"
+              value={capabilities?.notes_enabled ?? false}
+              onToggle={() => dispatch(toggleCapability('notes_enabled'))}
             />
-
-            {/* Bottom Row - Two Small Tiles */}
-            <View style={styles.bentoRow}>
-              <BentoTile
-                icon="contrast-outline"
-                label="Theme"
-                value={settings.theme === 'dark' ? 'Dark' : settings.theme === 'light' ? 'Light' : 'System'}
-                size="small"
-                onPress={() => {
-                  const next = settings.theme === 'dark' ? 'light' : settings.theme === 'light' ? 'system' : 'dark';
-                  dispatch(setTheme(next));
-                }}
-                hapticFeedback={haptics.selection}
-              />
-              <BentoTile
-                icon="hand-left-outline"
-                label="Haptics"
-                value={settings.hapticLevel === 'full' ? 'Full' : settings.hapticLevel === 'reduced' ? 'Reduced' : 'Off'}
-                size="small"
-                onPress={() => {
-                  const next = settings.hapticLevel === 'full' ? 'reduced' : settings.hapticLevel === 'reduced' ? 'off' : 'full';
-                  dispatch(setHapticLevel(next));
-                }}
-                hapticFeedback={haptics.success}
-              />
-            </View>
           </View>
-        </Animated.View>
+        </AnimatedReanimated.View>
 
-        {/* Support Section */}
-        <Animated.View entering={FadeInDown.delay(400).duration(500)}>
-          <Text style={styles.sectionHeader}>Support</Text>
-
-          <View style={styles.bentoGrid}>
-            {/* Top Row - Two Medium Tiles */}
-            <View style={styles.bentoRow}>
-              <BentoTile
-                icon="help-circle-outline"
-                label="Help & FAQ"
-                size="medium"
-                onPress={() => Alert.alert('Help', 'Help documentation coming soon!')}
-                hapticFeedback={haptics.light}
-              />
-              <BentoTile
-                icon="chatbubble-outline"
-                label="Feedback"
-                size="medium"
-                onPress={() => Alert.alert('Feedback', 'Feedback form coming soon!')}
-                hapticFeedback={haptics.light}
-              />
+        {/* Focus Timer Section */}
+        <AnimatedReanimated.View entering={FadeInDown.delay(150).duration(400)}>
+          <Text style={styles.sectionHeader}>Focus Timer</Text>
+          <View style={styles.section}>
+            <View style={styles.settingRow}>
+              <Text style={styles.settingLabel}>Focus Duration</Text>
+              <View style={styles.pillGroup}>
+                {FOCUS_DURATIONS.map(d => (
+                  <Pressable
+                    key={d}
+                    style={[
+                      styles.pill,
+                      settings.pomodoro.focusDuration === d && styles.pillActive
+                    ]}
+                    onPress={() => dispatch(setPomodoroFocusDuration(d))}
+                  >
+                    <Text style={[
+                      styles.pillText,
+                      settings.pomodoro.focusDuration === d && styles.pillTextActive
+                    ]}>{d}</Text>
+                  </Pressable>
+                ))}
+              </View>
             </View>
+            <View style={styles.divider} />
+            <View style={styles.settingRow}>
+              <Text style={styles.settingLabel}>Break Duration</Text>
+              <View style={styles.pillGroup}>
+                {BREAK_DURATIONS.map(d => (
+                  <Pressable
+                    key={d}
+                    style={[
+                      styles.pill,
+                      settings.pomodoro.shortBreakDuration === d && styles.pillActive
+                    ]}
+                    onPress={() => dispatch(setPomodoroShortBreakDuration(d))}
+                  >
+                    <Text style={[
+                      styles.pillText,
+                      settings.pomodoro.shortBreakDuration === d && styles.pillTextActive
+                    ]}>{d}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            </View>
+            <View style={styles.divider} />
+            <SettingToggle
+              icon="play-circle"
+              label="Auto-start Breaks"
+              value={settings.pomodoro.autoStartBreaks}
+              onToggle={() => dispatch(setPomodoroAutoStartBreaks(!settings.pomodoro.autoStartBreaks))}
+            />
           </View>
-        </Animated.View>
+        </AnimatedReanimated.View>
+
+        {/* Preferences Section */}
+        <AnimatedReanimated.View entering={FadeInDown.delay(200).duration(400)}>
+          <Text style={styles.sectionHeader}>Preferences</Text>
+          <View style={styles.section}>
+            <SettingItem
+              icon="moon"
+              label="Bedtime"
+              value={formatBedtime(settings.bedtime)}
+              onPress={() => setShowBedtimePicker(true)}
+            />
+            <View style={styles.divider} />
+            <SettingItem
+              icon="contrast"
+              label="Theme"
+              value={settings.theme === 'dark' ? 'Dark' : settings.theme === 'light' ? 'Light' : 'System'}
+              onPress={() => {
+                const themes: Array<'dark' | 'light' | 'system'> = ['dark', 'light', 'system'];
+                const idx = themes.indexOf(settings.theme);
+                dispatch(setTheme(themes[(idx + 1) % themes.length]));
+                haptics.selection();
+              }}
+            />
+            <View style={styles.divider} />
+            <SettingItem
+              icon="hand-left"
+              label="Haptics"
+              value={settings.hapticLevel === 'full' ? 'Full' : settings.hapticLevel === 'reduced' ? 'Reduced' : 'Off'}
+              onPress={() => {
+                const levels: Array<'full' | 'reduced' | 'off'> = ['full', 'reduced', 'off'];
+                const idx = levels.indexOf(settings.hapticLevel);
+                dispatch(setHapticLevel(levels[(idx + 1) % levels.length]));
+                haptics.selection();
+              }}
+            />
+            <View style={styles.divider} />
+            <SettingToggle
+              icon="notifications"
+              label="Notifications"
+              value={settings.notifications.enabled}
+              onToggle={() => dispatch(setNotificationsEnabled(!settings.notifications.enabled))}
+            />
+          </View>
+        </AnimatedReanimated.View>
+
+        {/* About Section */}
+        <AnimatedReanimated.View entering={FadeInDown.delay(250).duration(400)}>
+          <Text style={styles.sectionHeader}>About</Text>
+          <View style={styles.section}>
+            <SettingItem icon="information-circle" label="Version" value="1.0.0" />
+            <View style={styles.divider} />
+            <SettingItem
+              icon="star"
+              label="Rate App"
+              onPress={() => Alert.alert('Coming Soon', 'Rating coming soon!')}
+              showChevron
+            />
+            <View style={styles.divider} />
+            <SettingItem
+              icon="chatbubble"
+              label="Feedback"
+              onPress={() => Alert.alert('Coming Soon', 'Feedback coming soon!')}
+              showChevron
+            />
+          </View>
+        </AnimatedReanimated.View>
 
         {/* Sign Out */}
-        <Animated.View entering={FadeInDown.delay(500).duration(500)}>
+        <AnimatedReanimated.View entering={FadeInDown.delay(300).duration(400)}>
           <Pressable style={styles.signOutButton} onPress={handleSignOut}>
             <Text style={styles.signOutText}>Sign Out</Text>
           </Pressable>
 
           <Text style={styles.version}>Momentum v1.0.0</Text>
-        </Animated.View>
+        </AnimatedReanimated.View>
       </ScrollView>
 
       {/* Avatar Picker Modal */}
@@ -277,6 +333,15 @@ const ProfileScreen = () => {
         currentAvatar={avatarUri}
         onSelectAvatar={handleAvatarSelect}
         userName={displayName}
+      />
+
+      {/* Bedtime Picker Modal */}
+      <TimePickerModal
+        visible={showBedtimePicker}
+        onClose={() => setShowBedtimePicker(false)}
+        value={settings.bedtime}
+        onSave={(time) => dispatch(setBedtime(time))}
+        title="Set Bedtime"
       />
 
       {/* Edit Profile Modal */}
@@ -295,6 +360,20 @@ const ProfileScreen = () => {
               </Pressable>
             </View>
 
+            {/* Avatar in modal */}
+            <Pressable
+              onPress={() => {
+                setShowEditProfile(false);
+                setTimeout(() => setShowAvatarPicker(true), 300);
+              }}
+              style={styles.editAvatarContainer}
+            >
+              {renderAvatar()}
+              <View style={styles.editAvatarBadge}>
+                <Ionicons name="camera" size={14} color="#000" />
+              </View>
+            </Pressable>
+
             <Text style={styles.editLabel}>Display Name</Text>
             <TextInput
               style={styles.editInput}
@@ -306,7 +385,7 @@ const ProfileScreen = () => {
 
             <Pressable style={styles.editSaveButton} onPress={handleSaveProfile}>
               <LinearGradient
-                colors={[colors.dark.pastelBlue, colors.dark.pastelPurple]}
+                colors={['#ffffff', '#e5e5e5']}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 style={styles.editSaveGradient}
@@ -321,138 +400,83 @@ const ProfileScreen = () => {
   );
 };
 
-// Settings Row Component
-interface SettingsRowProps {
-  icon: keyof typeof Ionicons.glyphMap;
+// Setting Item Component (clickable row)
+const SettingItem = ({ icon, label, value, onPress, showChevron }: {
+  icon: string;
   label: string;
   value?: string;
+  onPress?: () => void;
   showChevron?: boolean;
-  onPress: () => void;
-}
-
-const SettingsRow: React.FC<SettingsRowProps> = ({
-  icon,
-  label,
-  value,
-  showChevron = false,
-  onPress,
 }) => (
   <Pressable
-    style={({ pressed }) => [
-      styles.settingsRow,
-      pressed && styles.settingsRowPressed,
-    ]}
+    style={styles.settingItem}
     onPress={onPress}
+    disabled={!onPress}
   >
-    <View style={styles.settingsLeft}>
-      <View style={styles.settingsIconContainer}>
-        <Ionicons name={icon} size={20} color={colors.dark.textSecondary} />
-      </View>
-      <Text style={styles.settingsLabel}>{label}</Text>
+    <View style={styles.settingLeft}>
+      <Ionicons name={icon as any} size={20} color={colors.dark.textSecondary} />
+      <Text style={styles.settingLabel}>{label}</Text>
     </View>
-    <View style={styles.settingsRight}>
-      {value && <Text style={styles.settingsValue}>{value}</Text>}
-      {showChevron && (
-        <Ionicons name="chevron-forward" size={20} color={colors.dark.textTertiary} />
-      )}
+    <View style={styles.settingRight}>
+      {value && <Text style={styles.settingValue}>{value}</Text>}
+      {showChevron && <Ionicons name="chevron-forward" size={18} color={colors.dark.textTertiary} />}
     </View>
   </Pressable>
 );
 
-interface BentoTileProps {
-  icon: keyof typeof Ionicons.glyphMap;
+// Setting Toggle Component with Premium Design
+const SettingToggle = ({ icon, label, value, onToggle }: {
+  icon: string;
   label: string;
-  value?: string;
-  size?: 'small' | 'medium' | 'large';
-  onPress: () => void;
-  hapticFeedback?: () => void;
-}
+  value: boolean;
+  onToggle: () => void;
+}) => {
+  const thumbPosition = useRef(new Animated.Value(value ? 27 : 3)).current;
 
-const BentoTile: React.FC<BentoTileProps> = ({ icon, label, value, size = 'medium', onPress, hapticFeedback }) => {
-  const getTileStyle = () => {
-    switch (size) {
-      case 'small':
-        return styles.bentoTileSmall;
-      case 'large':
-        return styles.bentoTileLarge;
-      default:
-        return styles.bentoTileMedium;
-    }
-  };
-
-
-  const getGradientColors = () => {
-    switch (size) {
-      case 'large':
-        // Metallic pearl/silver gradient - polished finish
-        return ['#f8f9fa', '#e9ecef', '#dee2e6', '#ced4da', '#e9ecef'] as const;
-      case 'small':
-        return ['rgba(255,255,255,0.06)', 'rgba(255,255,255,0.02)'] as const;
-      default:
-        return ['rgba(255,255,255,0.07)', 'rgba(255,255,255,0.025)'] as const;
-    }
-  };
-
-  const isLarge = size === 'large';
-
-  const handlePress = () => {
-    hapticFeedback?.();
-    onPress();
-  };
+  useEffect(() => {
+    Animated.spring(thumbPosition, {
+      toValue: value ? 27 : 3,
+      damping: 15,
+      stiffness: 150,
+      mass: 0.8,
+      overshootClamping: false,
+      restDisplacementThreshold: 0.01,
+      restSpeedThreshold: 0.01,
+      useNativeDriver: false,
+    }).start();
+  }, [value]);
 
   return (
-    <Pressable
-      style={[styles.bentoTile, getTileStyle()]}
-      onPress={handlePress}
-      android_ripple={{ color: isLarge ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.1)' }}
-    >
-      {/* Glow effect for large tiles */}
-      {isLarge && <View style={styles.bentoGlow} />}
-
-      <LinearGradient
-        colors={getGradientColors()}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={[styles.bentoTileGradient, isLarge && styles.bentoTileGradientLarge]}
+    <View style={styles.settingItem}>
+      <View style={styles.settingLeft}>
+        <Ionicons name={icon as any} size={20} color={colors.dark.textSecondary} />
+        <Text style={styles.settingLabel}>{label}</Text>
+      </View>
+      <Pressable
+        onPress={onToggle}
+        style={[styles.customToggle, value && styles.customToggleActive]}
       >
-        {/* Metallic shimmer overlay for reflective effect */}
-        {isLarge && (
-          <>
-            {/* Primary metallic reflection */}
-            <LinearGradient
-              colors={['rgba(255,255,255,0.4)', 'transparent', 'rgba(255,255,255,0.15)', 'transparent'] as const}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.bentoShimmer}
-            />
-            {/* Secondary cool metallic accent */}
-            <LinearGradient
-              colors={['transparent', 'rgba(203,213,225,0.12)', 'transparent'] as const}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0.5 }}
-              style={[styles.bentoShimmer, { opacity: 0.5 }]}
-            />
-          </>
-        )}
-        {/* Border effect */}
-        <View style={[styles.bentoTileBorder, isLarge && styles.bentoTileBorderLarge]} />
-        <View style={[styles.bentoIconContainer, isLarge && styles.bentoIconContainerLarge]}>
-          <Ionicons name={icon} size={isLarge ? 32 : 24} color={isLarge ? '#0b0b0d' : '#fff'} />
-        </View>
-        <View style={styles.bentoTextContainer}>
-          <Text style={[styles.bentoLabel, isLarge && styles.bentoLabelLarge]}>{label}</Text>
-          {value && <Text style={styles.bentoValue}>{value}</Text>}
-        </View>
-      </LinearGradient>
-    </Pressable>
+        <LinearGradient
+          colors={value ? ['#ffffff', '#e5e5e5'] : ['rgba(255,255,255,0.15)', 'rgba(255,255,255,0.1)'] as any}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={StyleSheet.absoluteFill}
+        />
+        <Animated.View
+          style={[
+            styles.customToggleThumb,
+            { marginLeft: thumbPosition }
+          ]}
+        />
+      </Pressable>
+    </View>
   );
 };
-
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000', // Deep black
+    backgroundColor: colors.dark.background,
   },
   header: {
     paddingHorizontal: spacing.lg,
@@ -463,7 +487,6 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_700Bold',
     color: colors.dark.text,
     letterSpacing: -1.5,
-    marginBottom: 6,
     lineHeight: 48,
   },
   scrollView: {
@@ -473,6 +496,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     gap: spacing.lg,
   },
+  // Profile Card
   profileCard: {
     borderRadius: radii.xl,
     overflow: 'hidden',
@@ -484,161 +508,169 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.1)',
     backgroundColor: 'rgba(255,255,255,0.03)',
   },
-  profileHeader: {
+  profileRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: spacing.lg,
-    marginTop: spacing.sm,
   },
   avatarContainer: {
-    position: 'relative',
-    marginBottom: spacing.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarGlow: {
-    position: 'absolute',
-    width: 90,
-    height: 90,
-    borderRadius: 45,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+    marginRight: spacing.md,
   },
   avatarGradient: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,
     borderColor: '#000',
   },
   avatarImage: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     borderWidth: 2,
     borderColor: colors.dark.background,
   },
   avatarInitials: {
-    fontSize: 32,
+    fontSize: 24,
     fontWeight: '700',
     color: '#000',
   },
-  avatarEditBadge: {
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: '#fff',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#000',
-  },
   profileInfo: {
-    alignItems: 'center',
+    flex: 1,
   },
   displayName: {
-    fontSize: 30,
+    fontSize: 20,
     fontFamily: 'Inter_700Bold',
     color: '#fff',
-    letterSpacing: -0.8,
-    textAlign: 'center',
+    letterSpacing: -0.5,
   },
   email: {
     fontSize: 14,
     fontFamily: 'Inter_500Medium',
     color: 'rgba(255,255,255,0.5)',
-    marginTop: 4,
-    letterSpacing: -0.1,
+    marginTop: 2,
   },
   upgradePrompt: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: 'rgba(251,191,36,0.1)',
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     borderRadius: radii.md,
-    marginBottom: spacing.md,
+    marginTop: spacing.md,
   },
   upgradeText: {
-    ...typography.bodySmall,
-    color: '#fff',
+    fontSize: 13,
+    fontFamily: 'Inter_500Medium',
+    color: '#fbbf24',
     flex: 1,
   },
-  profileButton: {
-    borderRadius: radii.lg,
-    overflow: 'hidden',
-  },
-  profileButtonGradient: {
-    paddingVertical: spacing.md,
-    alignItems: 'center',
-    borderRadius: radii.lg,
-  },
-  profileButtonText: {
-    ...typography.body,
-    color: '#000',
-    fontWeight: '700',
-  },
+  // Sections
   sectionHeader: {
     fontSize: 12,
     fontFamily: 'Inter_700Bold',
-    color: 'rgba(255,255,255,0.5)',
+    color: colors.dark.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: 2,
-    marginBottom: spacing.md,
+    marginBottom: spacing.sm,
     marginLeft: spacing.xs,
+    opacity: 0.7,
   },
-
-  settingsRow: {
+  section: {
+    backgroundColor: 'rgba(255,255,255,0.03)',
+    borderRadius: radii.xl,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+    overflow: 'hidden',
+  },
+  settingItem: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: 'rgba(255,255,255,0.03)',
-    paddingHorizontal: spacing.md,
+    paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
-    borderRadius: radii.lg,
-    marginBottom: spacing.xs,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    minHeight: 56,
   },
-  settingsRowPressed: {
-    opacity: 0.7,
-  },
-  settingsLeft: {
+  settingLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
   },
-  settingsIconContainer: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    backgroundColor: 'rgba(255,255,255,0.05)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  settingsLabel: {
-    fontSize: 16,
-    fontFamily: 'Inter_500Medium',
-    color: '#fff',
-    letterSpacing: -0.2,
-  },
-  settingsRight: {
+  settingRight: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
   },
-  settingsValue: {
-    fontSize: 15,
+  settingLabel: {
+    fontSize: 17,
+    fontFamily: 'Inter_500Medium',
+    color: colors.dark.text,
+    letterSpacing: -0.3,
+  },
+  settingValue: {
+    fontSize: 16,
     fontFamily: 'Inter_600SemiBold',
     color: colors.dark.textSecondary,
-    letterSpacing: -0.1,
+    letterSpacing: -0.2,
   },
+  settingRow: {
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    marginHorizontal: spacing.lg,
+  },
+  pillGroup: {
+    flexDirection: 'row',
+    gap: spacing.xs,
+    marginTop: spacing.sm,
+  },
+  pill: {
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    borderRadius: radii.full,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+    minWidth: 48,
+    alignItems: 'center',
+  },
+  pillActive: {
+    backgroundColor: '#fff',
+    borderColor: '#fff',
+  },
+  pillText: {
+    fontSize: 14,
+    fontFamily: 'Inter_600SemiBold',
+    color: colors.dark.textSecondary,
+  },
+  pillTextActive: {
+    color: '#000',
+  },
+  // Toggle
+  customToggle: {
+    width: 56,
+    height: 32,
+    borderRadius: 16,
+    overflow: 'hidden',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
+  },
+  customToggleActive: {
+    borderColor: '#fff',
+  },
+  customToggleThumb: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: colors.dark.background,
+  },
+  // Sign Out
   signOutButton: {
     backgroundColor: 'rgba(255,107,107,0.1)',
     paddingVertical: spacing.md,
@@ -660,10 +692,9 @@ const styles = StyleSheet.create({
     color: colors.dark.textTertiary,
     textAlign: 'center',
     marginTop: spacing.lg,
-    letterSpacing: 0.2,
     opacity: 0.6,
   },
-  // Modal styles
+  // Modal
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.7)',
@@ -691,6 +722,24 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_700Bold',
     color: colors.dark.text,
     letterSpacing: -0.5,
+  },
+  editAvatarContainer: {
+    alignSelf: 'center',
+    marginBottom: spacing.lg,
+    position: 'relative',
+  },
+  editAvatarBadge: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#fff',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: colors.dark.surface,
   },
   editLabel: {
     fontSize: 13,
@@ -725,134 +774,8 @@ const styles = StyleSheet.create({
   editSaveText: {
     fontSize: 16,
     fontFamily: 'Inter_600SemiBold',
-    color: colors.dark.background,
+    color: '#000',
     letterSpacing: -0.2,
-  },
-  // Bento Grid Styles
-  bentoGrid: {
-    gap: spacing.md,
-  },
-  bentoRow: {
-    flexDirection: 'row',
-    gap: spacing.md,
-  },
-  bentoTile: {
-    borderRadius: radii.xl,
-    overflow: 'hidden',
-    position: 'relative',
-  },
-  bentoTileSmall: {
-    flex: 1,
-    height: 140,
-  },
-  bentoTileMedium: {
-    flex: 1,
-    height: 160,
-  },
-  bentoTileLarge: {
-    width: '100%',
-    height: 180,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.12,
-    shadowRadius: 12,
-    elevation: 6,
-  },
-  // Glow effect for large tiles
-  bentoGlow: {
-    position: 'absolute',
-    top: -20,
-    left: -20,
-    right: -20,
-    bottom: -20,
-    borderRadius: radii.xl,
-    backgroundColor: 'rgba(255, 255, 255, 0.15)', // Subtle white metallic glow
-    opacity: 0.5,
-    zIndex: -1,
-  },
-  bentoTileGradient: {
-    flex: 1,
-    padding: spacing.lg,
-    justifyContent: 'space-between',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
-    position: 'relative',
-  },
-  bentoTileGradientLarge: {
-    borderWidth: 1.5,
-    borderColor: 'rgba(255,255,255,0.25)', // Polished metallic edge
-    padding: spacing.xl,
-  },
-  // Shimmer overlay for large tiles
-  bentoShimmer: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    borderRadius: radii.xl,
-    pointerEvents: 'none',
-  },
-  bentoTileBorder: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    borderRadius: radii.xl,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.05)',
-    pointerEvents: 'none',
-  },
-  bentoTileBorderLarge: {
-    borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.3)', // Metallic silver border
-  },
-  bentoIconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
-  },
-  bentoIconContainerLarge: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: 'rgba(0,0,0,0.05)', // Subtle metallic background
-    borderWidth: 1.5,
-    borderColor: 'rgba(0,0,0,0.15)',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  bentoTextContainer: {
-    gap: 4,
-  },
-  bentoLabel: {
-    fontSize: 13,
-    fontFamily: 'Inter_600SemiBold',
-    color: 'rgba(255,255,255,0.55)',
-    marginBottom: 2,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-  },
-  bentoLabelLarge: {
-    fontSize: 15,
-    color: 'rgba(0,0,0,0.7)', // Dark text for white background
-    letterSpacing: 1.5,
-    fontFamily: 'Inter_700Bold',
-  },
-  bentoValue: {
-    fontSize: 20,
-    fontFamily: 'Inter_700Bold',
-    color: '#fff',
-    letterSpacing: -0.5,
   },
 });
 

@@ -1,13 +1,21 @@
-import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
+import { createSlice, createAsyncThunk, PayloadAction, createSelector } from '@reduxjs/toolkit';
 import { supabase } from '@/services/supabase';
 import { Note, NoteInsert, NoteUpdate, Database } from '@/types/database';
 import { RootState } from '../index';
 
+/**
+ * State definition for the Notes module.
+ */
 interface NotesState {
+    /** List of notes, usually sorted by pinned status and date. */
     notes: Note[];
+    /** Loading state for fetches. */
     loading: boolean;
+    /** Syncing state for mutations (create/update/delete). */
     syncing: boolean;
+    /** Error message if an operation fails. */
     error: string | null;
+    /** Timestamp of the last successful sync. */
     lastSynced: string | null;
 }
 
@@ -19,9 +27,12 @@ const initialState: NotesState = {
     lastSynced: null,
 };
 
-// Async thunks
+// --- Async Thunks ---
 
-// Fetch notes
+/**
+ * Fetches all notes for the authenticated user.
+ * Sorted by pinned status (desc) and updated_at (desc).
+ */
 export const fetchNotes = createAsyncThunk<
     Note[],
     void,
@@ -50,7 +61,9 @@ export const fetchNotes = createAsyncThunk<
     }
 );
 
-// Create note
+/**
+ * Creates a new note.
+ */
 export const createNote = createAsyncThunk<
     Note,
     Omit<NoteInsert, 'user_id'>,
@@ -82,7 +95,9 @@ export const createNote = createAsyncThunk<
     }
 );
 
-// Update note
+/**
+ * Updates an existing note.
+ */
 export const updateNote = createAsyncThunk<
     Note,
     { id: string; updates: NoteUpdate },
@@ -105,7 +120,9 @@ export const updateNote = createAsyncThunk<
     }
 );
 
-// Delete note
+/**
+ * Deletes a note by ID.
+ */
 export const deleteNote = createAsyncThunk(
     'notes/deleteNote',
     async (id: string, { rejectWithValue }) => {
@@ -123,6 +140,10 @@ export const deleteNote = createAsyncThunk(
     }
 );
 
+/**
+ * Notes Slice
+ * Manages user notes (rich text/plain text).
+ */
 const notesSlice = createSlice({
     name: 'notes',
     initialState,
@@ -160,6 +181,7 @@ const notesSlice = createSlice({
             .addCase(createNote.fulfilled, (state, action) => {
                 state.syncing = false;
                 state.notes.unshift(action.payload);
+                // Maintain sort order: Pinned first, then new
                 state.notes.sort((a, b) => {
                     if (a.is_pinned === b.is_pinned) {
                         return new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime();
@@ -214,6 +236,38 @@ const notesSlice = createSlice({
 export const { clearNotesError, clearNotes } = notesSlice.actions;
 export default notesSlice.reducer;
 
-// Selectors
-export const selectAllNotes = (state: RootState) => state.notes.notes;
-export const selectNotesLoading = (state: RootState) => state.notes.loading;
+// --- Selectors ---
+
+const selectNotesState = (state: RootState) => state.notes;
+
+export const selectAllNotes = createSelector(
+    [selectNotesState],
+    (notesState) => notesState.notes
+);
+
+export const selectNotesLoading = createSelector(
+    [selectNotesState],
+    (notesState) => notesState.loading
+);
+
+export const selectNotesSyncing = createSelector(
+    [selectNotesState],
+    (notesState) => notesState.syncing
+);
+
+/**
+ * Selects only pinned notes, sorted by updated date.
+ */
+export const selectPinnedNotes = createSelector(
+    [selectAllNotes],
+    (notes) => notes.filter(n => n.is_pinned)
+);
+
+/**
+ * Selects specific note by ID.
+ */
+export const selectNoteById = (noteId: string) =>
+    createSelector(
+        [selectAllNotes],
+        (notes) => notes.find(n => n.id === noteId)
+    );

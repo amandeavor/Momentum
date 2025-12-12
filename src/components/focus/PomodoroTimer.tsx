@@ -22,6 +22,7 @@ import {
   cancelSession,
   fetchFocusStats,
 } from '@/store/slices/pomodoroSlice';
+import { recordActivity } from '@/store/slices/analyticsSlice';
 import { selectActiveSession } from '@/store/selectors';
 import useFocusTimer from '@/hooks/useFocusTimer';
 
@@ -46,7 +47,7 @@ const PomodoroTimer: React.FC<PomodoroTimerProps> = ({
 }) => {
   const dispatch = useAppDispatch();
   const activeSession = useAppSelector(selectActiveSession);
-  
+
   const [isBreak, setIsBreak] = useState(false);
   const [localSessionsCompleted, setLocalSessionsCompleted] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
@@ -70,6 +71,12 @@ const PomodoroTimer: React.FC<PomodoroTimerProps> = ({
 
   const playButtonScale = useSharedValue(1);
 
+  const playButtonStyle = useAnimatedStyle(() => {
+    return {
+      transform: [{ scale: playButtonScale.value }],
+    };
+  });
+
   const totalSeconds = isBreak ? breakSeconds : workSeconds;
   const progress = totalSeconds > 0 ? (totalSeconds - timeRemaining) / totalSeconds : 0;
 
@@ -78,11 +85,11 @@ const PomodoroTimer: React.FC<PomodoroTimerProps> = ({
   const timeDisplay = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
 
   // Calculate elapsed minutes for the current session
+  // Uses remaining time for accuracy (avoids drift from app backgrounding)
   const getElapsedMinutes = useCallback(() => {
-    if (!sessionStartTimeRef.current) return 0;
-    const elapsedMs = Date.now() - sessionStartTimeRef.current;
-    return Math.max(0, Math.floor(elapsedMs / 60000));
-  }, []);
+    const elapsed = totalSeconds - timeRemaining;
+    return Math.max(0, Math.floor(elapsed / 60));
+  }, [totalSeconds, timeRemaining]);
 
   // Handle timer completion
   useEffect(() => {
@@ -104,6 +111,8 @@ const PomodoroTimer: React.FC<PomodoroTimerProps> = ({
             actualMinutes: workDuration,
           })).then(() => {
             dispatch(fetchFocusStats());
+            // Record activity for streak tracking
+            dispatch(recordActivity());
           });
         }
 
@@ -131,25 +140,10 @@ const PomodoroTimer: React.FC<PomodoroTimerProps> = ({
   const handlePlayPause = useCallback(async () => {
     if (isLoading) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    
+
     if (isRunning) {
-      // Stopping mid-session - record elapsed time
+      // Just pause the timer, don't cancel the session
       stopTimer();
-      
-      if (!isBreak && activeSession?.id) {
-        setIsLoading(true);
-        try {
-          const elapsedMinutes = getElapsedMinutes();
-          await dispatch(cancelSession({
-            sessionId: activeSession.id,
-            elapsedMinutes,
-          }));
-          dispatch(fetchFocusStats());
-          sessionStartTimeRef.current = null;
-        } finally {
-          setIsLoading(false);
-        }
-      }
     } else {
       // Starting a new session
       if (!isBreak && !activeSession) {
@@ -181,7 +175,7 @@ const PomodoroTimer: React.FC<PomodoroTimerProps> = ({
     if (isLoading) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     stopTimer();
-    
+
     // Cancel active session with elapsed time
     if (activeSession?.id && !isBreak) {
       setIsLoading(true);
@@ -196,7 +190,7 @@ const PomodoroTimer: React.FC<PomodoroTimerProps> = ({
         setIsLoading(false);
       }
     }
-    
+
     setIsBreak(false);
     setTime(workSeconds);
     sessionStartTimeRef.current = null;
@@ -206,7 +200,7 @@ const PomodoroTimer: React.FC<PomodoroTimerProps> = ({
     if (isLoading) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     stopTimer();
-    
+
     if (!isBreak) {
       setIsLoading(true);
       try {
@@ -226,7 +220,7 @@ const PomodoroTimer: React.FC<PomodoroTimerProps> = ({
           }
           dispatch(fetchFocusStats());
         }
-        
+
         // Calculate next break duration
         const nextSets = currentSets + 1;
         const shouldUseLongBreak = nextSets > 0 && nextSets % 4 === 0;

@@ -1,10 +1,22 @@
-import React, { useState, useCallback } from 'react';
-// Force reload
+/**
+ * Journal Screen - Reflection & Diary
+ * 
+ * Allows users to write daily journal entries, track mood, and maintain a streak.
+ * Optimized for performance with FlatList and memoized components.
+ * 
+ * Features:
+ * - Create/Edit/Delete entries
+ * - Daily streak tracking
+ * - Mood selection
+ * - Export functionality (Text, Markdown, JSON)
+ * 
+ * @module JournalScreen
+ */
+import React, { useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   Pressable,
   TextInput,
   RefreshControl,
@@ -12,10 +24,11 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
+  FlatList,
+  ListRenderItem,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInDown, FadeInRight } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 
@@ -30,6 +43,7 @@ import {
   selectJournalStreak,
 } from '@/store/selectors';
 import { fetchEntries, addEntry, updateEntry, deleteEntry } from '@/store/slices/journalSlice';
+import { recordActivity } from '@/store/slices/analyticsSlice';
 import {
   copyJournalsToClipboard,
   shareJournalsAsFile,
@@ -37,8 +51,99 @@ import {
 } from '@/services/export';
 import type { JournalInsert, Journal as JournalEntry } from '@/types/database';
 
+/**
+ * Mood emoji options available for selection.
+ */
 const MOOD_OPTIONS = ['😊', '😌', '😐', '😔', '😤', '🥱', '🤔', '😴'];
 
+/**
+ * Props for the ExportOption component.
+ */
+interface ExportOptionProps {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  sublabel: string;
+  color: string;
+  onPress: () => void;
+  disabled: boolean;
+  fullWidth?: boolean;
+}
+
+/**
+ * Renders a single export option card.
+ */
+const ExportOption = React.memo(({ icon, label, sublabel, color, onPress, disabled, fullWidth }: ExportOptionProps) => (
+  <Pressable
+    style={[
+      styles.exportOptionCard,
+      fullWidth ? styles.exportOptionFull : styles.exportOptionHalf,
+      disabled && { opacity: 0.5 }
+    ]}
+    onPress={onPress}
+    disabled={disabled}
+  >
+    <View style={styles.exportIconContainer}>
+      <Ionicons name={icon} size={24} color={color} />
+    </View>
+    <View>
+      <Text style={styles.exportOptionLabel}>{label}</Text>
+      <Text style={styles.exportOptionSublabel}>{sublabel}</Text>
+    </View>
+  </Pressable>
+));
+
+/**
+ * Helper to format date strings relative to today.
+ */
+const formatDate = (dateStr: string): string => {
+  const date = new Date(dateStr);
+  const today = new Date();
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+
+  if (dateStr === today.toISOString().split('T')[0]) return 'Today';
+  if (dateStr === yesterday.toISOString().split('T')[0]) return 'Yesterday';
+
+  return date.toLocaleDateString('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+  });
+};
+
+/**
+ * Journal Entry Item Component
+ * 
+ * Renders a single journal entry card.
+ * Memoized for list performance.
+ */
+const JournalItem = React.memo(({ item, index, onPress }: { item: JournalEntry; index: number; onPress: () => void }) => (
+  <Animated.View
+    entering={FadeInRight.delay(index * 50).duration(400)}
+  >
+    <Pressable onPress={onPress}>
+      <View style={styles.entryCard}>
+        <View style={styles.entryHeader}>
+          {item.mood && (
+            <Text style={styles.entryMood}>{item.mood}</Text>
+          )}
+          <Text style={styles.entryDate}>
+            {formatDate(item.created_at)}
+          </Text>
+        </View>
+        <Text style={styles.entryBody} numberOfLines={3}>
+          {item.body}
+        </Text>
+      </View>
+    </Pressable>
+  </Animated.View>
+));
+
+/**
+ * JournalScreen Component
+ * 
+ * Main interface for the journal feature.
+ */
 export default function JournalScreen() {
   const insets = useSafeAreaInsets();
   const dispatch = useAppDispatch();
@@ -47,38 +152,52 @@ export default function JournalScreen() {
   const todaysEntry = useAppSelector(selectTodaysEntry);
   const streak = useAppSelector(selectJournalStreak);
 
+  // Local State
   const [refreshing, setRefreshing] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
 
-  // Edit/Create State
+  // Form State
   const [editingEntry, setEditingEntry] = useState<JournalEntry | null>(null);
   const [entryForm, setEntryForm] = useState({ mood: '', body: '' });
   const [saving, setSaving] = useState(false);
   const [exporting, setExporting] = useState(false);
 
+  // Initial fetch
   React.useEffect(() => {
     dispatch(fetchEntries({}));
   }, [dispatch]);
 
+  /**
+   * Refreshes the journal list.
+   */
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     await dispatch(fetchEntries({}));
     setRefreshing(false);
   }, [dispatch]);
 
-  const openCreateModal = () => {
+  /**
+   * Opens modal to create a new entry.
+   */
+  const openCreateModal = useCallback(() => {
     setEditingEntry(null);
     setEntryForm({ mood: '', body: '' });
     setShowModal(true);
-  };
+  }, []);
 
-  const openEditModal = (entry: JournalEntry) => {
+  /**
+   * Opens modal to edit an existing entry.
+   */
+  const openEditModal = useCallback((entry: JournalEntry) => {
     setEditingEntry(entry);
     setEntryForm({ mood: entry.mood || '', body: entry.body });
     setShowModal(true);
-  };
+  }, []);
 
+  /**
+   * Saves entry to backend.
+   */
   const handleSaveEntry = async () => {
     if (!entryForm.body.trim()) return;
 
@@ -98,6 +217,8 @@ export default function JournalScreen() {
           body: entryForm.body.trim(),
         };
         await dispatch(addEntry(entry)).unwrap();
+        // Record activity for streak tracking
+        dispatch(recordActivity());
       }
 
       setEntryForm({ mood: '', body: '' });
@@ -111,6 +232,9 @@ export default function JournalScreen() {
     }
   };
 
+  /**
+   * Deletes entry after confirmation.
+   */
   const handleDeleteEntry = () => {
     if (!editingEntry) return;
 
@@ -137,6 +261,9 @@ export default function JournalScreen() {
     );
   };
 
+  /**
+   * Handles export functionality.
+   */
   const handleExport = async (format: ExportFormat, method: 'copy' | 'share') => {
     if (entries.length === 0) {
       Alert.alert('No Entries', 'There are no journal entries to export.');
@@ -175,49 +302,23 @@ export default function JournalScreen() {
     }
   };
 
-  const formatDate = (dateStr: string): string => {
-    const date = new Date(dateStr);
-    const today = new Date();
-    const yesterday = new Date(today);
-    yesterday.setDate(yesterday.getDate() - 1);
-
-    if (dateStr === today.toISOString().split('T')[0]) return 'Today';
-    if (dateStr === yesterday.toISOString().split('T')[0]) return 'Yesterday';
-
-    return date.toLocaleDateString('en-US', {
-      weekday: 'short',
-      month: 'short',
-      day: 'numeric',
-    });
-  };
+  /**
+   * Renders a single item in the FlatList.
+   */
+  const renderItem: ListRenderItem<JournalEntry> = useCallback(({ item, index }) => (
+    <JournalItem item={item} index={index} onPress={() => openEditModal(item)} />
+  ), [openEditModal]);
 
   return (
     <View style={styles.container}>
-      {/* Hero Header */}
-      <View style={[styles.header, { paddingTop: insets.top + spacing.md }]}>
-        <View style={styles.headerContent}>
-          <Text style={styles.pageTitle}>Journal</Text>
-          <View style={styles.headerActions}>
-            <Pressable
-              onPress={() => setShowExportModal(true)}
-              style={styles.headerButton}
-            >
-              <Ionicons name="download-outline" size={22} color="#fff" />
-            </Pressable>
-            <Pressable onPress={openCreateModal} style={styles.addIconButton}>
-              <View style={styles.addIconContent}>
-                <Ionicons name="add" size={22} color="#000" />
-              </View>
-            </Pressable>
-          </View>
-        </View>
-      </View>
-
-      <ScrollView
-        style={styles.scrollView}
+      {/* List Container with Header */}
+      <FlatList
+        data={entries}
+        renderItem={renderItem}
+        keyExtractor={(item) => item.id}
         contentContainerStyle={[
-          styles.scrollContent,
-          { paddingBottom: insets.bottom + 100 },
+          styles.listContent,
+          { paddingTop: insets.top + spacing.md, paddingBottom: insets.bottom + 100 }
         ]}
         showsVerticalScrollIndicator={false}
         refreshControl={
@@ -227,87 +328,85 @@ export default function JournalScreen() {
             tintColor="#fff"
           />
         }
-      >
-        {/* Streak Card */}
-        <Animated.View entering={FadeInDown.delay(100).duration(500)}>
-          <View style={styles.streakCard}>
-            <View style={styles.streakContent}>
-              <View style={styles.streakRow}>
-                <View style={styles.streakIcon}>
-                  <Ionicons name="flame" size={26} color="#fff" />
-                </View>
-                <View style={styles.streakInfo}>
-                  <Text style={styles.streakValue}>{streak} Day Streak</Text>
-                  <Text style={styles.streakLabel}>
-                    {todaysEntry
-                      ? "You've reflected today!"
-                      : 'Write to keep your streak'}
-                  </Text>
-                </View>
-                {!todaysEntry && (
-                  <Pressable onPress={openCreateModal}>
-                    <View style={styles.writeButton}>
-                      <Text style={styles.writeButtonText}>Write</Text>
+        ListHeaderComponent={
+          <>
+            {/* Header */}
+            <View style={styles.header}>
+              <View style={styles.headerContent}>
+                <Text style={styles.pageTitle}>Journal</Text>
+                <View style={styles.headerActions}>
+                  <Pressable
+                    onPress={() => setShowExportModal(true)}
+                    style={styles.headerButton}
+                  >
+                    <Ionicons name="download-outline" size={22} color="#fff" />
+                  </Pressable>
+                  <Pressable onPress={openCreateModal} style={styles.addIconButton}>
+                    <View style={styles.addIconContent}>
+                      <Ionicons name="add" size={22} color="#000" />
                     </View>
                   </Pressable>
-                )}
-              </View>
-            </View>
-          </View>
-        </Animated.View>
-
-        {/* Entries List */}
-        <Animated.View entering={FadeInDown.delay(200).duration(500)}>
-          <Text style={styles.sectionHeader}>Your Reflections</Text>
-
-          {entries.length === 0 && !loading ? (
-            <View style={styles.emptyState}>
-              <View style={styles.emptyIconContainer}>
-                <Ionicons
-                  name="book-outline"
-                  size={48}
-                  color={colors.dark.textTertiary}
-                />
-              </View>
-              <Text style={styles.emptyTitle}>No entries yet</Text>
-              <Text style={styles.emptySubtitle}>
-                Start your reflection journey
-              </Text>
-              <Pressable style={styles.emptyButton} onPress={openCreateModal}>
-                <View style={styles.emptyButtonContent}>
-                  <Ionicons name="create" size={20} color={colors.dark.background} />
-                  <Text style={styles.emptyButtonText}>Write First Entry</Text>
                 </View>
-              </Pressable>
+              </View>
             </View>
-          ) : (
-            <View style={styles.entriesList}>
-              {entries.map((entry, index) => (
-                <Animated.View
-                  key={entry.id}
-                  entering={FadeInRight.delay(index * 50).duration(400)}
-                >
-                  <Pressable onPress={() => openEditModal(entry)}>
-                    <View style={styles.entryCard}>
-                      <View style={styles.entryHeader}>
-                        {entry.mood && (
-                          <Text style={styles.entryMood}>{entry.mood}</Text>
-                        )}
-                        <Text style={styles.entryDate}>
-                          {formatDate(entry.created_at)}
-                        </Text>
-                      </View>
-                      <Text style={styles.entryBody} numberOfLines={3}>
-                        {entry.body}
+
+            {/* Streak Card */}
+            <Animated.View entering={FadeInDown.delay(100).duration(500)} style={styles.streakContainer}>
+              <View style={styles.streakCard}>
+                <View style={styles.streakContent}>
+                  <View style={styles.streakRow}>
+                    <View style={styles.streakIcon}>
+                      <Ionicons name="flame" size={26} color="#fff" />
+                    </View>
+                    <View style={styles.streakInfo}>
+                      <Text style={styles.streakValue}>{streak} Day Streak</Text>
+                      <Text style={styles.streakLabel}>
+                        {todaysEntry
+                          ? "You've reflected today!"
+                          : 'Write to keep your streak'}
                       </Text>
                     </View>
-                  </Pressable>
-                </Animated.View>
-              ))}
-            </View>
-          )}
-        </Animated.View>
-      </ScrollView>
+                    {!todaysEntry && (
+                      <Pressable onPress={openCreateModal}>
+                        <View style={styles.writeButton}>
+                          <Text style={styles.writeButtonText}>Write</Text>
+                        </View>
+                      </Pressable>
+                    )}
+                  </View>
+                </View>
+              </View>
+            </Animated.View>
+
+            <Text style={styles.sectionHeader}>Your Reflections</Text>
+          </>
+        }
+        ListEmptyComponent={
+          !loading ? (
+            <Animated.View entering={FadeInDown.delay(300).duration(500)} style={styles.emptyStateContainer}>
+              <View style={styles.emptyState}>
+                <View style={styles.emptyIconContainer}>
+                  <Ionicons
+                    name="book-outline"
+                    size={48}
+                    color={colors.dark.textTertiary}
+                  />
+                </View>
+                <Text style={styles.emptyTitle}>No entries yet</Text>
+                <Text style={styles.emptySubtitle}>
+                  Start your reflection journey
+                </Text>
+                <Pressable style={styles.emptyButton} onPress={openCreateModal}>
+                  <View style={styles.emptyButtonContent}>
+                    <Ionicons name="create" size={20} color={colors.dark.background} />
+                    <Text style={styles.emptyButtonText}>Write First Entry</Text>
+                  </View>
+                </Pressable>
+              </View>
+            </Animated.View>
+          ) : null
+        }
+      />
 
       {/* Entry Modal (Create/Edit) */}
       <Modal
@@ -348,7 +447,7 @@ export default function JournalScreen() {
             </View>
           </View>
 
-          <ScrollView style={styles.modalContent}>
+          <View style={styles.modalContent}>
             <Text style={styles.moodLabel}>How are you feeling?</Text>
             <View style={styles.moodOptions}>
               {MOOD_OPTIONS.map((mood) => (
@@ -382,7 +481,7 @@ export default function JournalScreen() {
               textAlignVertical="top"
               autoFocus={!editingEntry}
             />
-          </ScrollView>
+          </View>
         </KeyboardAvoidingView>
       </Modal>
 
@@ -402,7 +501,7 @@ export default function JournalScreen() {
             <View style={{ width: 24 }} />
           </View>
 
-          <ScrollView style={styles.exportContent} contentContainerStyle={{ paddingBottom: insets.bottom + spacing.xl }}>
+          <View style={styles.exportContent}>
             <Text style={styles.exportDescription}>
               Export your {entries.length} journal entries
             </Text>
@@ -477,52 +576,24 @@ export default function JournalScreen() {
                 </Text>
               </View>
             </View>
-          </ScrollView>
+          </View>
         </View>
       </Modal>
     </View>
   );
 }
 
-// Export Option Component
-interface ExportOptionProps {
-  icon: keyof typeof Ionicons.glyphMap;
-  label: string;
-  sublabel: string;
-  color: string;
-  onPress: () => void;
-  disabled: boolean;
-  fullWidth?: boolean;
-}
-
-const ExportOption: React.FC<ExportOptionProps> = ({ icon, label, sublabel, color, onPress, disabled, fullWidth }) => (
-  <Pressable
-    style={[
-      styles.exportOptionCard,
-      fullWidth ? styles.exportOptionFull : styles.exportOptionHalf,
-      disabled && { opacity: 0.5 }
-    ]}
-    onPress={onPress}
-    disabled={disabled}
-  >
-    <View style={styles.exportIconContainer}>
-      <Ionicons name={icon} size={24} color={color} />
-    </View>
-    <View>
-      <Text style={styles.exportOptionLabel}>{label}</Text>
-      <Text style={styles.exportOptionSublabel}>{sublabel}</Text>
-    </View>
-  </Pressable>
-);
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#000',
   },
-  header: {
+  listContent: {
     paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.md,
+    paddingBottom: spacing.xxxl,
+  },
+  header: {
+    marginBottom: spacing.md,
   },
   headerContent: {
     flexDirection: 'row',
@@ -560,12 +631,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: '#fff',
   },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingHorizontal: spacing.lg,
-    gap: spacing.lg,
+  streakContainer: {
+    marginBottom: spacing.lg,
   },
   streakCard: {
     borderRadius: radii.xl,
@@ -617,9 +684,7 @@ const styles = StyleSheet.create({
     ...typography.h3,
     color: '#fff',
     marginBottom: spacing.sm,
-  },
-  entriesList: {
-    gap: spacing.sm,
+    marginTop: spacing.sm,
   },
   entryCard: {
     backgroundColor: 'rgba(255,255,255,0.05)',
@@ -627,6 +692,7 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.1)',
+    marginBottom: spacing.sm,
   },
   entryHeader: {
     flexDirection: 'row',
@@ -645,6 +711,9 @@ const styles = StyleSheet.create({
     ...typography.body,
     color: 'rgba(255,255,255,0.8)',
     lineHeight: 22,
+  },
+  emptyStateContainer: {
+    paddingTop: spacing.xxxl,
   },
   emptyState: {
     alignItems: 'center',
@@ -805,30 +874,31 @@ const styles = StyleSheet.create({
   exportOptionCard: {
     backgroundColor: 'rgba(255,255,255,0.05)',
     borderRadius: radii.xl,
-    padding: spacing.lg,
+    padding: spacing.md,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.1)',
-    justifyContent: 'space-between',
-    minHeight: 120,
   },
   exportOptionHalf: {
-    width: '47%', // Slightly less than 50% to account for gap
-    flexGrow: 1,
+    width: '47%',
   },
   exportOptionFull: {
     width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
   },
   exportIconContainer: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: 'rgba(255,255,255,0.05)',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: spacing.md,
   },
   exportOptionLabel: {
-    ...typography.h4,
+    ...typography.body,
+    fontWeight: '600',
     color: '#fff',
     marginBottom: 2,
   },
@@ -837,23 +907,19 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.5)',
   },
   tipCard: {
-    marginTop: spacing.md,
-    borderRadius: radii.xl,
-    overflow: 'hidden',
     backgroundColor: 'rgba(255,255,255,0.05)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderRadius: radii.lg,
+    padding: spacing.md,
+    marginTop: 'auto',
+    marginBottom: spacing.xl,
   },
   tipContent: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    padding: spacing.lg,
-    gap: spacing.md,
+    gap: spacing.sm,
   },
   tipText: {
-    ...typography.body,
-    color: 'rgba(255,255,255,0.8)',
+    ...typography.caption,
+    color: 'rgba(255,255,255,0.7)',
     flex: 1,
-    lineHeight: 22,
   },
 });

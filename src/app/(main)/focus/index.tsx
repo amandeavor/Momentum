@@ -338,6 +338,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_500Medium',
     color: colors.dark.textTertiary,
     letterSpacing: -0.2,
+    backgroundColor: 'transparent',
   },
   settingsButton: {
     width: 40,

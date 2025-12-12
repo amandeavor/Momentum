@@ -1,5 +1,31 @@
-import React, { useMemo, useState } from 'react';
-import { View, Text, StyleSheet, Pressable, ScrollView, Dimensions, Modal, Alert, KeyboardAvoidingView, Platform } from 'react-native';
+/**
+ * Habits Screen
+ * 
+ * Displays the user's active habits in a grid layout.
+ * Optimized for performance using FlatList and memoized components.
+ * 
+ * Features:
+ * - Grid layout (two columns)
+ * - Create/Edit/Delete habit
+ * - Daily check-in
+ * - Streak display
+ * 
+ * @module HabitsScreen
+ */
+import React, { useMemo, useState, useCallback } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  Pressable,
+  Alert,
+  Modal,
+  KeyboardAvoidingView,
+  Platform,
+  Dimensions,
+  FlatList,
+  ListRenderItem
+} from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -18,9 +44,101 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const COLUMN_GAP = spacing.md;
 const CARD_WIDTH = (SCREEN_WIDTH - (spacing.lg * 2) - COLUMN_GAP) / 2;
 
+/**
+ * Props for the individual Habit Card component.
+ */
+interface HabitCardProps {
+  habit: DbHabit;
+  isCompleted: boolean;
+  onCheckIn: () => void;
+  onLongPress: () => void;
+  index: number;
+}
+
+/**
+ * Renders a single habit card with gradient background and status.
+ * Memoized to prevent unnecessary re-renders.
+ */
+const HabitCard = React.memo(({ habit, isCompleted, onCheckIn, onLongPress, index }: HabitCardProps) => {
+  const habitColor = habit.color || colors.dark.pastelBlue;
+
+  // Premium Gradient for Completed State (Rich & Deep)
+  const completedGradient = useMemo(() => ['rgba(16,185,129,0.2)', 'rgba(5,150,105,0.1)'], []);
+
+  // Subtle Gradient for Incomplete State
+  const incompleteGradient = useMemo(() => ['rgba(255,255,255,0.05)', 'rgba(255,255,255,0.01)'], []);
+
+  return (
+    <Animated.View
+      entering={FadeInDown.delay(100 + index * 50).duration(400)}
+      style={{ width: CARD_WIDTH, marginBottom: COLUMN_GAP }}
+    >
+      <Pressable
+        style={[
+          styles.habitCard,
+          isCompleted && styles.habitCardCompleted,
+          !isCompleted && { borderColor: 'rgba(255,255,255,0.08)' }
+        ]}
+        onPress={onCheckIn}
+        onLongPress={onLongPress}
+        delayLongPress={500}
+      >
+        {/* Gradient Background */}
+        <LinearGradient
+          colors={isCompleted ? completedGradient as any : incompleteGradient as any}
+          style={StyleSheet.absoluteFill}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+        />
+
+        {/* Icon */}
+        <View style={[
+          styles.habitIcon,
+          {
+            backgroundColor: isCompleted ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.05)',
+          }
+        ]}>
+          <Ionicons
+            name={(habit.icon as any) || 'flash'}
+            size={24}
+            color={isCompleted ? '#fff' : habitColor}
+          />
+        </View>
+
+        <View style={styles.habitInfo}>
+          <Text style={[styles.habitTitle, isCompleted && styles.habitTitleCompleted]} numberOfLines={2}>
+            {habit.title}
+          </Text>
+
+          <View style={styles.streakContainer}>
+            <Ionicons
+              name="flame"
+              size={12}
+              color={isCompleted ? '#fff' : '#f59e0b'}
+            />
+            <Text style={[styles.streakText, isCompleted && styles.streakTextCompleted]}>
+              {habit.streak_count}
+            </Text>
+          </View>
+        </View>
+
+        {/* Checkmark Overlay (Subtle) */}
+        {isCompleted && (
+          <View style={styles.checkOverlay}>
+            <Ionicons name="checkmark-circle" size={20} color="#fff" />
+          </View>
+        )}
+      </Pressable>
+    </Animated.View>
+  );
+});
+
+/**
+ * HabitsScreen Component
+ */
 const HabitsScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
-  const { habits, completions, checkIn, removeHabit, editHabit, refresh } = useHabits();
+  const { habits, completions, checkIn, removeHabit, editHabit } = useHabits();
 
   // Edit State
   const [editingHabit, setEditingHabit] = useState<DbHabit | null>(null);
@@ -28,35 +146,33 @@ const HabitsScreen: React.FC = () => {
   const [editTitle, setEditTitle] = useState('');
   const [saving, setSaving] = useState(false);
 
-  const today = new Date().toISOString().split('T')[0];
+  const today = useMemo(() => new Date().toISOString().split('T')[0], []);
 
   const activeHabits = useMemo(() => {
     return habits.filter(h => !h.is_archived);
   }, [habits]);
 
-  const isCompletedToday = (habitId: string) => {
+  const isCompletedToday = useCallback((habitId: string) => {
     return completions.some(
       c => c.habit_id === habitId && c.completed_at.startsWith(today)
     );
-  };
+  }, [completions, today]);
 
-  const completedCount = activeHabits.filter(h => isCompletedToday(h.id)).length;
-
-  const handleCheckIn = async (habitId: string) => {
+  const handleCheckIn = useCallback(async (habitId: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     await checkIn(habitId);
-  };
+  }, [checkIn]);
 
-  const handleAddHabit = () => {
+  const handleAddHabit = useCallback(() => {
     router.push('/(main)/habits/habits-list');
-  };
+  }, []);
 
-  const handleLongPress = (habit: DbHabit) => {
+  const handleLongPress = useCallback((habit: DbHabit) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
     setEditingHabit(habit);
     setEditTitle(habit.title);
     setShowEditModal(true);
-  };
+  }, []);
 
   const handleSaveEdit = async () => {
     if (!editingHabit || !editTitle.trim()) return;
@@ -102,6 +218,17 @@ const HabitsScreen: React.FC = () => {
     );
   };
 
+  // Render item for FlatList
+  const renderItem: ListRenderItem<DbHabit> = useCallback(({ item, index }) => (
+    <HabitCard
+      habit={item}
+      index={index}
+      isCompleted={isCompletedToday(item.id)}
+      onCheckIn={() => handleCheckIn(item.id)}
+      onLongPress={() => handleLongPress(item)}
+    />
+  ), [isCompletedToday, handleCheckIn, handleLongPress]);
+
   return (
     <View style={styles.container}>
       {/* Deep Green Background Glow */}
@@ -116,56 +243,44 @@ const HabitsScreen: React.FC = () => {
 
       {/* Hero Header */}
       <View style={[styles.header, { paddingTop: insets.top + spacing.xl }]}>
-        <Text style={styles.pageTitle}>Habits</Text>
-        <Text style={styles.hintText}>Long press to edit</Text>
+        <View>
+          <Text style={styles.pageTitle}>Habits</Text>
+          <Text style={styles.hintText}>Long press to edit</Text>
+        </View>
         <Pressable onPress={() => router.push('/(main)/habits/habits-list')} style={styles.listButton}>
           <Ionicons name="list" size={24} color={colors.dark.text} />
         </Pressable>
       </View>
 
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={[
-          styles.scrollContent,
-          { paddingBottom: insets.bottom + 100 },
-        ]}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Habits Grid */}
-        {activeHabits.length === 0 ? (
-          <Animated.View entering={FadeInDown.delay(200).duration(500)}>
-            <View style={styles.emptyState}>
-              <View style={styles.emptyIcon}>
-                <Ionicons name="repeat" size={32} color={colors.dark.textTertiary} />
-              </View>
-              <Text style={styles.emptyTitle}>No habits yet</Text>
-              <Text style={styles.emptySubtitle}>
-                Start building positive routines
-              </Text>
-              <Pressable style={styles.emptyButton} onPress={handleAddHabit}>
-                <Text style={styles.emptyButtonText}>Create Habit</Text>
-              </Pressable>
+      {activeHabits.length === 0 ? (
+        <Animated.View entering={FadeInDown.delay(200).duration(500)} style={styles.emptyContainer}>
+          <View style={styles.emptyState}>
+            <View style={styles.emptyIcon}>
+              <Ionicons name="repeat" size={32} color={colors.dark.textTertiary} />
             </View>
-          </Animated.View>
-        ) : (
-          <View style={styles.habitsGrid}>
-            {activeHabits.map((habit, index) => (
-              <Animated.View
-                key={habit.id}
-                entering={FadeInDown.delay(100 + index * 50).duration(400)}
-                style={{ width: CARD_WIDTH }}
-              >
-                <HabitCard
-                  habit={habit}
-                  isCompleted={isCompletedToday(habit.id)}
-                  onCheckIn={() => handleCheckIn(habit.id)}
-                  onLongPress={() => handleLongPress(habit)}
-                />
-              </Animated.View>
-            ))}
+            <Text style={styles.emptyTitle}>No habits yet</Text>
+            <Text style={styles.emptySubtitle}>
+              Start building positive routines
+            </Text>
+            <Pressable style={styles.emptyButton} onPress={handleAddHabit}>
+              <Text style={styles.emptyButtonText}>Create Habit</Text>
+            </Pressable>
           </View>
-        )}
-      </ScrollView>
+        </Animated.View>
+      ) : (
+        <FlatList
+          data={activeHabits}
+          renderItem={renderItem}
+          keyExtractor={(item) => item.id}
+          numColumns={2}
+          contentContainerStyle={[
+            styles.listContent,
+            { paddingBottom: insets.bottom + 100 }
+          ]}
+          columnWrapperStyle={{ gap: COLUMN_GAP }}
+          showsVerticalScrollIndicator={false}
+        />
+      )}
 
       {/* Edit Modal */}
       <Modal
@@ -216,82 +331,6 @@ const HabitsScreen: React.FC = () => {
   );
 };
 
-interface HabitCardProps {
-  habit: DbHabit;
-  isCompleted: boolean;
-  onCheckIn: () => void;
-  onLongPress: () => void;
-}
-
-const HabitCard: React.FC<HabitCardProps> = ({ habit, isCompleted, onCheckIn, onLongPress }) => {
-  const habitColor = habit.color || colors.dark.pastelBlue;
-
-  // Premium Gradient for Completed State (Rich & Deep)
-  const completedGradient = ['rgba(16,185,129,0.2)', 'rgba(5,150,105,0.1)'];
-
-  // Subtle Gradient for Incomplete State
-  const incompleteGradient = ['rgba(255,255,255,0.05)', 'rgba(255,255,255,0.01)'];
-
-  return (
-    <Pressable
-      style={[
-        styles.habitCard,
-        isCompleted && styles.habitCardCompleted,
-        !isCompleted && { borderColor: 'rgba(255,255,255,0.08)' }
-      ]}
-      onPress={onCheckIn}
-      onLongPress={onLongPress}
-      delayLongPress={500}
-    >
-      {/* Gradient Background */}
-      <LinearGradient
-        colors={isCompleted ? completedGradient as any : incompleteGradient as any}
-        style={StyleSheet.absoluteFill}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-      />
-
-      {/* Icon */}
-      <View style={[
-        styles.habitIcon,
-        {
-          backgroundColor: isCompleted ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.05)',
-        }
-      ]}>
-        <Ionicons
-          name={(habit.icon as any) || 'flash'}
-          size={24}
-          color={isCompleted ? '#fff' : habitColor}
-        />
-      </View>
-
-      <View style={styles.habitInfo}>
-        <Text style={[styles.habitTitle, isCompleted && styles.habitTitleCompleted]} numberOfLines={2}>
-          {habit.title}
-        </Text>
-
-        <View style={styles.streakContainer}>
-          <Ionicons
-            name="flame"
-            size={12}
-            color={isCompleted ? '#fff' : '#f59e0b'}
-          />
-          <Text style={[styles.streakText, isCompleted && styles.streakTextCompleted]}>
-            {habit.streak_count}
-          </Text>
-        </View>
-      </View>
-
-      {/* Checkmark Overlay (Subtle) */}
-      {isCompleted && (
-        <View style={styles.checkOverlay}>
-          <Ionicons name="checkmark-circle" size={20} color="#fff" />
-        </View>
-      )}
-    </Pressable>
-  );
-};
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -326,35 +365,11 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
   },
   listButton: {
-    // Add specific styles for listButton if needed, e.g., positioning or padding
+    marginTop: 8,
   },
-  pageSubtitle: {
-    fontSize: 16,
-    fontFamily: 'Inter_500Medium',
-    color: colors.dark.textTertiary,
-    letterSpacing: -0.2,
-  },
-  addButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.03)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
+  listContent: {
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.sm,
-  },
-  habitsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: COLUMN_GAP,
   },
   habitCard: {
     height: 140,
@@ -406,6 +421,10 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: spacing.md,
     right: spacing.md,
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
   },
   emptyState: {
     alignItems: 'center',

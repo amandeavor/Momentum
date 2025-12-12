@@ -3,11 +3,19 @@ import { supabase } from '@/services/supabase';
 import { Todo, TodoInsert, TodoUpdate } from '@/types/database';
 import { RootState } from '../index';
 
+/**
+ * State definition for the Tasks module.
+ */
 interface TasksState {
+  /** List of all todos for the current user */
   todos: Todo[];
+  /** Loading state for initial fetch */
   loading: boolean;
+  /** Syncing state for mutations (create/update/delete) */
   syncing: boolean;
+  /** Error message if any operation fails */
   error: string | null;
+  /** Timestamp of last successful sync */
   lastSynced: string | null;
 }
 
@@ -19,25 +27,28 @@ const initialState: TasksState = {
   lastSynced: null,
 };
 
-// Async thunks
+// --- Async Thunks ---
 
-// Fetch all todos
+/**
+ * Fetches all todos for the authenticated user.
+ * Orders by custom order index (asc) and then creation time (desc).
+ */
 export const fetchTodos = createAsyncThunk(
   'tasks/fetchTodos',
   async (_, { getState, rejectWithValue }) => {
     try {
       const state = getState() as RootState;
       const userId = state.auth.user?.id;
-      
+
       if (!userId) throw new Error('Not authenticated');
-      
+
       const { data, error } = await supabase
         .from('todos')
         .select('*')
         .eq('user_id', userId)
         .order('order_index', { ascending: true })
         .order('created_at', { ascending: false });
-      
+
       if (error) throw error;
       return data;
     } catch (error) {
@@ -46,23 +57,25 @@ export const fetchTodos = createAsyncThunk(
   }
 );
 
-// Create a new todo
+/**
+ * Creates a new todo item in Supabase.
+ */
 export const createTodo = createAsyncThunk<Todo, Omit<TodoInsert, 'user_id'>>(
   'tasks/createTodo',
   async (todo, { getState, rejectWithValue }) => {
     try {
       const state = getState() as RootState;
       const userId = state.auth.user?.id;
-      
+
       if (!userId) throw new Error('Not authenticated');
-      
+
       const insertData: TodoInsert = { ...todo, user_id: userId };
       const { data, error } = await (supabase
         .from('todos') as any)
         .insert(insertData)
         .select()
         .single();
-      
+
       if (error) throw error;
       return data as Todo;
     } catch (error) {
@@ -71,7 +84,9 @@ export const createTodo = createAsyncThunk<Todo, Omit<TodoInsert, 'user_id'>>(
   }
 );
 
-// Update an existing todo
+/**
+ * Updates an existing todo item.
+ */
 export const updateTodo = createAsyncThunk<Todo, { id: string; updates: TodoUpdate }>(
   'tasks/updateTodo',
   async ({ id, updates }, { rejectWithValue }) => {
@@ -82,7 +97,7 @@ export const updateTodo = createAsyncThunk<Todo, { id: string; updates: TodoUpda
         .eq('id', id)
         .select()
         .single();
-      
+
       if (error) throw error;
       return data as Todo;
     } catch (error) {
@@ -91,23 +106,25 @@ export const updateTodo = createAsyncThunk<Todo, { id: string; updates: TodoUpda
   }
 );
 
-// Toggle todo completion
+/**
+ * Toggles the 'completed' status of a todo.
+ */
 export const toggleTodoComplete = createAsyncThunk<Todo, string>(
   'tasks/toggleTodoComplete',
   async (id, { getState, rejectWithValue }) => {
     try {
       const state = getState() as RootState;
       const todo = state.tasks.todos.find(t => t.id === id);
-      
+
       if (!todo) throw new Error('Todo not found');
-      
+
       const { data, error } = await (supabase
         .from('todos') as any)
         .update({ completed: !todo.completed })
         .eq('id', id)
         .select()
         .single();
-      
+
       if (error) throw error;
       return data as Todo;
     } catch (error) {
@@ -116,7 +133,9 @@ export const toggleTodoComplete = createAsyncThunk<Todo, string>(
   }
 );
 
-// Delete a todo
+/**
+ * Deletes a todo item permanently.
+ */
 export const deleteTodo = createAsyncThunk(
   'tasks/deleteTodo',
   async (id: string, { rejectWithValue }) => {
@@ -125,7 +144,7 @@ export const deleteTodo = createAsyncThunk(
         .from('todos')
         .delete()
         .eq('id', id);
-      
+
       if (error) throw error;
       return id;
     } catch (error) {
@@ -134,7 +153,9 @@ export const deleteTodo = createAsyncThunk(
   }
 );
 
-// Link task to timeblock
+/**
+ * Links or unlinks a task to a specific timeblock in the schedule.
+ */
 export const linkTaskToTimeblock = createAsyncThunk<Todo, { taskId: string; timeblockId: string | null }>(
   'tasks/linkTaskToTimeblock',
   async ({ taskId, timeblockId }, { rejectWithValue }) => {
@@ -145,7 +166,7 @@ export const linkTaskToTimeblock = createAsyncThunk<Todo, { taskId: string; time
         .eq('id', taskId)
         .select()
         .single();
-      
+
       if (error) throw error;
       return data as Todo;
     } catch (error) {
@@ -154,18 +175,21 @@ export const linkTaskToTimeblock = createAsyncThunk<Todo, { taskId: string; time
   }
 );
 
-// Reorder todos
+/**
+ * Batched update to reorder multiple todos.
+ * Updates the 'order_index' field.
+ */
 export const reorderTodos = createAsyncThunk<string[], string[]>(
   'tasks/reorderTodos',
   async (orderedIds, { rejectWithValue }) => {
     try {
       // Update order_index for each todo
-      const updates = orderedIds.map((id, index) => 
+      const updates = orderedIds.map((id, index) =>
         (supabase.from('todos') as any)
           .update({ order_index: index })
           .eq('id', id)
       );
-      
+
       await Promise.all(updates);
       return orderedIds;
     } catch (error) {
@@ -174,7 +198,10 @@ export const reorderTodos = createAsyncThunk<string[], string[]>(
   }
 );
 
-// Tasks slice
+/**
+ * Tasks Slice
+ * Handles all logic for Todo management including optimistic updates and syncing.
+ */
 const tasksSlice = createSlice({
   name: 'tasks',
   initialState,
@@ -320,15 +347,16 @@ export const {
 
 export default tasksSlice.reducer;
 
-// Selectors
+// --- Selectors ---
+
 export const selectAllTodos = (state: RootState) => state.tasks.todos;
-export const selectIncompleteTodos = (state: RootState) => 
+export const selectIncompleteTodos = (state: RootState) =>
   state.tasks.todos.filter(t => !t.completed);
-export const selectCompletedTodos = (state: RootState) => 
+export const selectCompletedTodos = (state: RootState) =>
   state.tasks.todos.filter(t => t.completed);
-export const selectTodoById = (id: string) => (state: RootState) => 
+export const selectTodoById = (id: string) => (state: RootState) =>
   state.tasks.todos.find(t => t.id === id);
-export const selectTodosByTimeblock = (timeblockId: string) => (state: RootState) => 
+export const selectTodosByTimeblock = (timeblockId: string) => (state: RootState) =>
   state.tasks.todos.filter(t => t.timeblock_id === timeblockId);
 export const selectTodosLoading = (state: RootState) => state.tasks.loading;
 export const selectTodosSyncing = (state: RootState) => state.tasks.syncing;

@@ -1,5 +1,7 @@
-import { createSlice, PayloadAction } from '@reduxjs/toolkit';
+import { createSlice, PayloadAction, createSelector } from '@reduxjs/toolkit';
 import { ThemeMode } from '@/theme';
+// Import RootState at the top level to avoid circular dependency issues in selectors if they were in the same file
+import { RootState } from '../index';
 
 /**
  * Haptic feedback intensity levels.
@@ -326,21 +328,66 @@ export const {
 
 export default settingsSlice.reducer;
 
-// Selectors
-import { RootState } from '../index';
+// --- Selectors ---
 
-export const selectSettings = (state: RootState) => state.settings;
-export const selectTheme = (state: RootState) => state.settings.theme;
-export const selectReducedMotion = (state: RootState) => state.settings.reducedMotion;
-export const selectHapticLevel = (state: RootState) => state.settings.hapticLevel;
-export const selectNotifications = (state: RootState) => state.settings.notifications;
-export const selectOnboardingCompleted = (state: RootState) => state.settings.onboardingCompleted;
-export const selectBedtimeSet = (state: RootState) => state.settings.bedtimeSet;
-export const selectBedtime = (state: RootState) => state.settings.bedtime;
-export const selectPomodoro = (state: RootState) => state.settings.pomodoro;
-export const selectPomodoroDefaults = (state: RootState) => ({
-  focus: state.settings.defaultFocusMinutes,
-  break: state.settings.defaultBreakMinutes,
-});
-export const selectSoundEnabled = (state: RootState) => state.settings.soundEnabled;
-export const selectTimeblockViewStyle = (state: RootState) => state.settings.timeblockViewStyle;
+const selectSettingsState = (state: RootState) => state.settings;
+
+export const selectSettings = selectSettingsState;
+
+export const selectTheme = createSelector(
+  [selectSettingsState],
+  (settings) => settings.theme
+);
+
+export const selectReducedMotion = createSelector(
+  [selectSettingsState],
+  (settings) => settings.reducedMotion
+);
+
+export const selectHapticLevel = createSelector(
+  [selectSettingsState],
+  (settings) => settings.hapticLevel
+);
+
+export const selectNotifications = createSelector(
+  [selectSettingsState],
+  (settings) => settings.notifications
+);
+
+export const selectOnboardingCompleted = createSelector(
+  [selectSettingsState],
+  (settings) => settings.onboardingCompleted
+);
+
+export const selectBedtimeSet = createSelector(
+  [selectSettingsState],
+  (settings) => settings.bedtimeSet
+);
+
+export const selectBedtime = createSelector(
+  [selectSettingsState],
+  (settings) => settings.bedtime
+);
+
+export const selectPomodoro = createSelector(
+  [selectSettingsState],
+  (settings) => settings.pomodoro
+);
+
+export const selectPomodoroDefaults = createSelector(
+  [selectSettingsState],
+  (settings) => ({
+    focus: settings.defaultFocusMinutes,
+    break: settings.defaultBreakMinutes,
+  })
+);
+
+export const selectSoundEnabled = createSelector(
+  [selectSettingsState],
+  (settings) => settings.soundEnabled
+);
+
+export const selectTimeblockViewStyle = createSelector(
+  [selectSettingsState],
+  (settings) => settings.timeblockViewStyle
+);

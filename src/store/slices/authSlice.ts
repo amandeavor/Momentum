@@ -1,8 +1,8 @@
-import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
-import { 
-  supabase, 
-  signInWithEmail, 
-  signUpWithEmail, 
+import { createSlice, createAsyncThunk, PayloadAction, createSelector } from '@reduxjs/toolkit';
+import {
+  supabase,
+  signInWithEmail,
+  signUpWithEmail,
   signInAnonymously,
   signInWithOAuth,
   signOut as supabaseSignOut,
@@ -12,16 +12,27 @@ import {
 } from '@/services/supabase';
 import { Profile, ProfileUpdate, Database } from '@/types/database';
 import { Session, User } from '@supabase/supabase-js';
+import { RootState } from '../index';
 
-// Auth state interface
+/**
+ * State definition for the Authentication module.
+ */
 interface AuthState {
+  /** Whether the user is currently authenticated (logged in). */
   isAuthenticated: boolean;
+  /** Whether the current user is an anonymous (guest) user. */
   isAnonymous: boolean;
+  /** The Supabase user object. */
   user: User | null;
+  /** The user's profile data from the `profiles` table. */
   profile: Profile | null;
+  /** The current active session. */
   session: Session | null;
+  /** Loading state for auth operations (login, signup, etc). */
   loading: boolean;
+  /** Internal initialization state (checking for session on app start). */
   initializing: boolean;
+  /** Error message from last failed operation. */
   error: string | null;
 }
 
@@ -36,51 +47,54 @@ const initialState: AuthState = {
   error: null,
 };
 
-// Async thunks
+// --- Async Thunks ---
 
-// Initialize auth - check for existing session
+/**
+ * Initializes authentication by checking for an existing Supabase session.
+ * If a session exists, it also fetches the user's profile.
+ */
 export const initializeAuth = createAsyncThunk(
   'auth/initialize',
   async (_, { rejectWithValue }) => {
     try {
       const { session, error } = await getCurrentSession();
       if (error) throw error;
-      
+
       if (session?.user) {
         const userId = session.user.id;
-        
+
         // Try to fetch existing profile
         let { data: profile, error: profileError } = await supabase
           .from('profiles')
           .select('*')
           .eq('id', userId)
           .single();
-        
-        // If profile doesn't exist (for older anonymous users), create it
+
+        // If profile doesn't exist (e.g. legacy anon users), create it
         if (profileError || !profile) {
           const { data: newProfile } = await (supabase
             .from('profiles') as any)
             .insert({ id: userId })
             .select()
             .single();
-          
+
           profile = newProfile;
-          
-          // Also create capabilities
+
+          // Also create default capabilities
           await (supabase.from('capabilities') as any)
             .insert({ user_id: userId })
             .select()
             .single();
         }
-        
-        return { 
-          session, 
-          user: session.user, 
+
+        return {
+          session,
+          user: session.user,
           profile,
           isAnonymous: session.user.is_anonymous ?? false,
         };
       }
-      
+
       return { session: null, user: null, profile: null, isAnonymous: false };
     } catch (error) {
       return rejectWithValue((error as Error).message);
@@ -88,14 +102,16 @@ export const initializeAuth = createAsyncThunk(
   }
 );
 
-// Sign in with email and password
+/**
+ * Signs in a user with email and password.
+ */
 export const signIn = createAsyncThunk(
   'auth/signIn',
   async ({ email, password }: { email: string; password: string }, { rejectWithValue }) => {
     try {
       const { data, error } = await signInWithEmail(email, password);
       if (error) throw error;
-      
+
       if (data.session?.user) {
         // Fetch user profile
         const { data: profile } = await supabase
@@ -103,14 +119,14 @@ export const signIn = createAsyncThunk(
           .select('*')
           .eq('id', data.session.user.id)
           .single();
-        
-        return { 
-          session: data.session, 
-          user: data.session.user, 
-          profile 
+
+        return {
+          session: data.session,
+          user: data.session.user,
+          profile
         };
       }
-      
+
       throw new Error('No session returned');
     } catch (error) {
       return rejectWithValue((error as Error).message);
@@ -118,7 +134,10 @@ export const signIn = createAsyncThunk(
   }
 );
 
-// Sign in with OAuth provider (currently Google only)
+/**
+ * Signs in with an OAuth provider (e.g., Google).
+ * Note: On mobile, this often involves a redirect flow.
+ */
 export const signInWithProvider = createAsyncThunk(
   'auth/signInWithProvider',
   async (
@@ -128,7 +147,7 @@ export const signInWithProvider = createAsyncThunk(
     try {
       const { data, error } = await signInWithOAuth(provider, intent);
       if (error) throw error;
-      // On native, we often need to manually open the returned URL.
+      // Return the URL for manual handling if needed
       return data?.url ?? null;
     } catch (error) {
       return rejectWithValue((error as Error).message);
@@ -136,22 +155,25 @@ export const signInWithProvider = createAsyncThunk(
   }
 );
 
-// Sign up with email and password
+/**
+ * Signs up a new user with email and password.
+ * Can optionally set an initial display name.
+ */
 export const signUp = createAsyncThunk(
   'auth/signUp',
-  async ({ 
-    email, 
-    password, 
-    displayName 
-  }: { 
-    email: string; 
-    password: string; 
+  async ({
+    email,
+    password,
+    displayName
+  }: {
+    email: string;
+    password: string;
     displayName?: string;
   }, { rejectWithValue }) => {
     try {
       const { data, error } = await signUpWithEmail(email, password);
       if (error) throw error;
-      
+
       if (data.session?.user) {
         // Update profile with display name if provided
         if (displayName) {
@@ -162,21 +184,21 @@ export const signUp = createAsyncThunk(
             .update(profileUpdate)
             .eq('id', data.session.user.id);
         }
-        
+
         // Fetch updated profile
         const { data: profile } = await supabase
           .from('profiles')
           .select('*')
           .eq('id', data.session.user.id)
           .single();
-        
-        return { 
-          session: data.session, 
-          user: data.session.user, 
-          profile 
+
+        return {
+          session: data.session,
+          user: data.session.user,
+          profile
         };
       }
-      
+
       throw new Error('No session returned');
     } catch (error) {
       return rejectWithValue((error as Error).message);
@@ -184,53 +206,55 @@ export const signUp = createAsyncThunk(
   }
 );
 
-// Sign in anonymously
+/**
+ * Signs in anonymously (Guest access).
+ */
 export const signInAnonymous = createAsyncThunk(
   'auth/signInAnonymous',
   async (_, { rejectWithValue }) => {
     try {
       const { data, error } = await signInAnonymously();
       if (error) throw error;
-      
+
       if (data.session?.user) {
         const userId = data.session.user.id;
-        
+
         // Try to fetch existing profile
         let { data: profile, error: profileError } = await supabase
           .from('profiles')
           .select('*')
           .eq('id', userId)
           .single();
-        
-        // If profile doesn't exist, create it
+
+        // Create profile if missing
         if (profileError || !profile) {
           const { data: newProfile, error: insertError } = await (supabase
             .from('profiles') as any)
             .insert({ id: userId })
             .select()
             .single();
-          
+
           if (insertError) {
             console.warn('Failed to create profile:', insertError);
           } else {
             profile = newProfile;
           }
-          
+
           // Also create capabilities
           await (supabase.from('capabilities') as any)
             .insert({ user_id: userId })
             .select()
             .single();
         }
-        
-        return { 
-          session: data.session, 
-          user: data.session.user, 
+
+        return {
+          session: data.session,
+          user: data.session.user,
           profile,
           isAnonymous: true,
         };
       }
-      
+
       throw new Error('No session returned');
     } catch (error) {
       return rejectWithValue((error as Error).message);
@@ -238,20 +262,22 @@ export const signInAnonymous = createAsyncThunk(
   }
 );
 
-// Convert anonymous account to permanent
+/**
+ * Links an email/password credential to an existing anonymous account.
+ */
 export const linkAccount = createAsyncThunk(
   'auth/linkAccount',
-  async ({ 
-    email, 
-    password 
-  }: { 
-    email: string; 
-    password: string; 
+  async ({
+    email,
+    password
+  }: {
+    email: string;
+    password: string;
   }, { rejectWithValue }) => {
     try {
       const { data, error } = await linkEmailToAnonymousUser(email, password);
       if (error) throw error;
-      
+
       return { user: data.user, isAnonymous: false };
     } catch (error) {
       return rejectWithValue((error as Error).message);
@@ -259,7 +285,9 @@ export const linkAccount = createAsyncThunk(
   }
 );
 
-// Sign out
+/**
+ * Signs out the current user.
+ */
 export const signOut = createAsyncThunk(
   'auth/signOut',
   async (_, { rejectWithValue }) => {
@@ -273,7 +301,9 @@ export const signOut = createAsyncThunk(
   }
 );
 
-// Update profile
+/**
+ * Updates the user's profile information.
+ */
 export const updateProfile = createAsyncThunk<
   Profile,
   ProfileUpdate,
@@ -284,17 +314,17 @@ export const updateProfile = createAsyncThunk<
     try {
       const state = getState();
       const userId = state.auth.user?.id;
-      
+
       if (!userId) throw new Error('Not authenticated');
-      
+
       const updateData: Database['public']['Tables']['profiles']['Update'] = updates;
-      
+
       const { data, error } = await (supabase.from('profiles') as any)
         .update(updateData)
         .eq('id', userId)
         .select()
         .single();
-      
+
       if (error) throw error;
       return data as Profile;
     } catch (error) {
@@ -303,7 +333,9 @@ export const updateProfile = createAsyncThunk<
   }
 );
 
-// Request password reset
+/**
+ * Requests a password reset email.
+ */
 export const requestPasswordReset = createAsyncThunk(
   'auth/requestPasswordReset',
   async (email: string, { rejectWithValue }) => {
@@ -317,7 +349,10 @@ export const requestPasswordReset = createAsyncThunk(
   }
 );
 
-// Auth slice
+/**
+ * Auth Slice
+ * Manages authentication state, user sessions, and profile data.
+ */
 const authSlice = createSlice({
   name: 'auth',
   initialState,
@@ -426,7 +461,6 @@ const authSlice = createSlice({
         state.error = null;
       })
       .addCase(signInWithProvider.fulfilled, (state) => {
-        // Session is handled by onAuthStateChange / callback screen
         state.loading = false;
       })
       .addCase(signInWithProvider.rejected, (state, action) => {
@@ -501,3 +535,42 @@ const authSlice = createSlice({
 
 export const { clearError, setSession, setProfile } = authSlice.actions;
 export default authSlice.reducer;
+
+// --- Selectors ---
+
+const selectAuthState = (state: RootState) => state.auth;
+
+export const selectUser = createSelector(
+  [selectAuthState],
+  (auth) => auth.user
+);
+
+export const selectProfile = createSelector(
+  [selectAuthState],
+  (auth) => auth.profile
+);
+
+export const selectIsAuthenticated = createSelector(
+  [selectAuthState],
+  (auth) => auth.isAuthenticated
+);
+
+export const selectIsAnonymous = createSelector(
+  [selectAuthState],
+  (auth) => auth.isAnonymous
+);
+
+export const selectAuthLoading = createSelector(
+  [selectAuthState],
+  (auth) => auth.loading
+);
+
+export const selectAuthInitializing = createSelector(
+  [selectAuthState],
+  (auth) => auth.initializing
+);
+
+export const selectAuthError = createSelector(
+  [selectAuthState],
+  (auth) => auth.error
+);

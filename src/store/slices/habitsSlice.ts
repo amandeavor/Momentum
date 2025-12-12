@@ -3,12 +3,21 @@ import { supabase } from '@/services/supabase';
 import { DbHabit, DbHabitInsert, DbHabitUpdate, HabitCompletion } from '@/types/database';
 import { RootState } from '../index';
 
+/**
+ * State definition for the Habits module.
+ */
 interface HabitsState {
+  /** List of all habits matching the user's current filter (active/archived). */
   habits: DbHabit[];
+  /** List of habit completions for the current day. */
   completions: HabitCompletion[];
+  /** Loading state for fetching habits/completions. */
   loading: boolean;
+  /** Syncing state for mutations (create/update/delete/check-in). */
   syncing: boolean;
+  /** Error message if any operation fails. */
   error: string | null;
+  /** Timestamp of last successful sync. */
   lastSynced: string | null;
 }
 
@@ -21,7 +30,10 @@ const initialState: HabitsState = {
   lastSynced: null,
 };
 
-// Helper to get today's date range
+/**
+ * Helper to get the start and end indices for today's date range.
+ * Used for querying daily completions.
+ */
 const getTodayRange = () => {
   const start = new Date();
   start.setHours(0, 0, 0, 0);
@@ -30,9 +42,12 @@ const getTodayRange = () => {
   return { start: start.toISOString(), end: end.toISOString() };
 };
 
-// Async thunks
+// --- Async Thunks ---
 
-// Fetch all habits
+/**
+ * Fetches all habits for the authenticated user.
+ * Can filter by archive status.
+ */
 export const fetchHabits = createAsyncThunk<
   DbHabit[],
   { includeArchived?: boolean } | undefined,
@@ -44,20 +59,20 @@ export const fetchHabits = createAsyncThunk<
     try {
       const state = getState();
       const userId = state.auth.user?.id;
-      
+
       if (!userId) throw new Error('Not authenticated');
-      
+
       let query = (supabase.from('habits') as any)
         .select('*')
         .eq('user_id', userId)
         .order('created_at', { ascending: false });
-      
+
       if (!includeArchived) {
         query = query.eq('is_archived', false);
       }
-      
+
       const { data, error } = await query;
-      
+
       if (error) throw error;
       return data as DbHabit[];
     } catch (error) {
@@ -66,7 +81,9 @@ export const fetchHabits = createAsyncThunk<
   }
 );
 
-// Fetch today's completions
+/**
+ * Fetches habit completions for the current day.
+ */
 export const fetchTodayCompletions = createAsyncThunk<
   HabitCompletion[],
   void,
@@ -77,17 +94,17 @@ export const fetchTodayCompletions = createAsyncThunk<
     try {
       const state = getState();
       const userId = state.auth.user?.id;
-      
+
       if (!userId) throw new Error('Not authenticated');
-      
+
       const { start, end } = getTodayRange();
-      
+
       const { data, error } = await (supabase.from('habit_completions') as any)
         .select('*')
         .eq('user_id', userId)
         .gte('completed_at', start)
         .lte('completed_at', end);
-      
+
       if (error) throw error;
       return data as HabitCompletion[];
     } catch (error) {
@@ -96,7 +113,9 @@ export const fetchTodayCompletions = createAsyncThunk<
   }
 );
 
-// Create a new habit
+/**
+ * Creates a new habit definition.
+ */
 export const createHabit = createAsyncThunk<
   DbHabit,
   Omit<DbHabitInsert, 'user_id'>,
@@ -107,14 +126,14 @@ export const createHabit = createAsyncThunk<
     try {
       const state = getState();
       const userId = state.auth.user?.id;
-      
+
       if (!userId) throw new Error('Not authenticated');
-      
+
       const { data, error } = await (supabase.from('habits') as any)
         .insert({ ...habitData, user_id: userId })
         .select()
         .single();
-      
+
       if (error) throw error;
       return data as DbHabit;
     } catch (error) {
@@ -123,7 +142,9 @@ export const createHabit = createAsyncThunk<
   }
 );
 
-// Update a habit
+/**
+ * Updates an existing habit's details.
+ */
 export const updateHabitAsync = createAsyncThunk<
   DbHabit,
   { id: string; updates: DbHabitUpdate },
@@ -137,7 +158,7 @@ export const updateHabitAsync = createAsyncThunk<
         .eq('id', id)
         .select()
         .single();
-      
+
       if (error) throw error;
       return data as DbHabit;
     } catch (error) {
@@ -146,7 +167,9 @@ export const updateHabitAsync = createAsyncThunk<
   }
 );
 
-// Delete a habit
+/**
+ * Deletes a habit permanently (and its history, depending on cascade rules).
+ */
 export const deleteHabitAsync = createAsyncThunk<
   string,
   string,
@@ -158,7 +181,7 @@ export const deleteHabitAsync = createAsyncThunk<
       const { error } = await (supabase.from('habits') as any)
         .delete()
         .eq('id', id);
-      
+
       if (error) throw error;
       return id;
     } catch (error) {
@@ -167,7 +190,10 @@ export const deleteHabitAsync = createAsyncThunk<
   }
 );
 
-// Complete a habit (check-in)
+/**
+ * Marks a habit as completed for today (Check-in).
+ * Also increments the habit's streak.
+ */
 export const completeHabit = createAsyncThunk<
   { habit: DbHabit; completion: HabitCompletion },
   { habitId: string; notes?: string },
@@ -178,9 +204,9 @@ export const completeHabit = createAsyncThunk<
     try {
       const state = getState();
       const userId = state.auth.user?.id;
-      
+
       if (!userId) throw new Error('Not authenticated');
-      
+
       // Create completion record
       const { data: completion, error: completionError } = await (supabase
         .from('habit_completions') as any)
@@ -191,14 +217,14 @@ export const completeHabit = createAsyncThunk<
         })
         .select()
         .single();
-      
+
       if (completionError) throw completionError;
-      
+
       // Update habit streak
       const habit = state.habits.habits.find((h: DbHabit) => h.id === habitId);
       const newStreak = (habit?.streak_count || 0) + 1;
       const newBestStreak = Math.max(newStreak, habit?.best_streak || 0);
-      
+
       const { data: updatedHabit, error: habitError } = await (supabase
         .from('habits') as any)
         .update({
@@ -209,9 +235,9 @@ export const completeHabit = createAsyncThunk<
         .eq('id', habitId)
         .select()
         .single();
-      
+
       if (habitError) throw habitError;
-      
+
       return {
         habit: updatedHabit as DbHabit,
         completion: completion as HabitCompletion,
@@ -222,7 +248,9 @@ export const completeHabit = createAsyncThunk<
   }
 );
 
-// Archive a habit
+/**
+ * Archives a habit, hiding it from the main list but preserving history.
+ */
 export const archiveHabit = createAsyncThunk<
   DbHabit,
   string,
@@ -236,7 +264,7 @@ export const archiveHabit = createAsyncThunk<
         .eq('id', id)
         .select()
         .single();
-      
+
       if (error) throw error;
       return data as DbHabit;
     } catch (error) {
@@ -245,7 +273,10 @@ export const archiveHabit = createAsyncThunk<
   }
 );
 
-// Habits slice
+/**
+ * Habits Slice
+ * Manages user habits, daily completions, and streak tracking.
+ */
 const habitsSlice = createSlice({
   name: 'habits',
   initialState,
@@ -253,7 +284,7 @@ const habitsSlice = createSlice({
     clearHabitsError(state) {
       state.error = null;
     },
-    // Local-only operations for offline support
+    // Local-only operations for optimistic updates and offline support
     addHabitLocal(state, action: PayloadAction<DbHabit>) {
       state.habits.unshift(action.payload);
     },
@@ -271,7 +302,7 @@ const habitsSlice = createSlice({
       state.completions = [];
       state.lastSynced = null;
     },
-    // Legacy compatibility
+    // Legacy actions for backward compatibility
     addHabit(state, action: PayloadAction<DbHabit>) {
       state.habits.push(action.payload);
     },
@@ -396,15 +427,16 @@ export const {
 
 export default habitsSlice.reducer;
 
-// Base selectors
+// --- Selectors ---
+
 const selectHabitsState = (state: RootState) => state.habits;
 
-// Memoized selectors
 export const selectAllHabits = createSelector(
   [selectHabitsState],
   (habitsState) => habitsState.habits
 );
 
+/** Selects only non-archived habits. */
 export const selectActiveHabits = createSelector(
   [selectAllHabits],
   (habits) => habits.filter(h => !h.is_archived)
@@ -425,15 +457,17 @@ export const selectHabitsSyncing = createSelector(
   (habitsState) => habitsState.syncing
 );
 
-// Check if habit is completed today
-export const selectIsHabitCompletedToday = (habitId: string) => 
+/**
+ * Checks if a specific habit has been completed today.
+ * Returns a boolean selector.
+ */
+export const selectIsHabitCompletedToday = (habitId: string) =>
   createSelector(
     [selectTodayCompletions],
     (completions) => completions.some(c => c.habit_id === habitId)
   );
 
-// Get habit by ID
-export const selectHabitById = (habitId: string) => 
+export const selectHabitById = (habitId: string) =>
   createSelector(
     [selectAllHabits],
     (habits) => habits.find(h => h.id === habitId)

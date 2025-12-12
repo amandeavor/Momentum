@@ -1,13 +1,21 @@
-import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
+import { createSlice, createAsyncThunk, PayloadAction, createSelector } from '@reduxjs/toolkit';
 import { supabase } from '@/services/supabase';
-import type { Timeblock, TimeblockInsert, TimeblockUpdate } from '@/types/database';
-import type { RootState } from '../index';
+import { Timeblock, TimeblockInsert, TimeblockUpdate } from '@/types/database';
+import { RootState } from '../index';
 
+/**
+ * State definition for Timeblocks (schedule/calendar) module.
+ */
 interface TimeblocksState {
+  /** List of timeblocks for the currently fetched range. */
   timeblocks: Timeblock[];
-  selectedDate: string; // YYYY-MM-DD format
+  /** currently selected date in YYYY-MM-DD format. */
+  selectedDate: string;
+  /** Loading state for fetch operations. */
   loading: boolean;
+  /** Error message from last failed operation. */
   error: string | null;
+  /** Timestamp of the last successful fetch. */
   lastFetched: string | null;
 }
 
@@ -19,7 +27,11 @@ const initialState: TimeblocksState = {
   lastFetched: null,
 };
 
-// Async thunks
+// --- Async Thunks ---
+
+/**
+ * Fetches timeblocks for a specific single date.
+ */
 export const fetchTimeblocks = createAsyncThunk(
   'timeblocks/fetchTimeblocks',
   async (date: string, { rejectWithValue }) => {
@@ -36,12 +48,15 @@ export const fetchTimeblocks = createAsyncThunk(
 
       if (error) throw error;
       return { timeblocks: data as Timeblock[], date };
-    } catch (error: any) {
-      return rejectWithValue(error.message);
+    } catch (error) {
+      return rejectWithValue((error as Error).message);
     }
   }
 );
 
+/**
+ * Fetches timeblocks for a date range (e.g. a week).
+ */
 export const fetchWeekTimeblocks = createAsyncThunk(
   'timeblocks/fetchWeekTimeblocks',
   async ({ startDate, endDate }: { startDate: string; endDate: string }, { rejectWithValue }) => {
@@ -60,12 +75,15 @@ export const fetchWeekTimeblocks = createAsyncThunk(
 
       if (error) throw error;
       return data as Timeblock[];
-    } catch (error: any) {
-      return rejectWithValue(error.message);
+    } catch (error) {
+      return rejectWithValue((error as Error).message);
     }
   }
 );
 
+/**
+ * Creates a new timeblock.
+ */
 export const createTimeblock = createAsyncThunk(
   'timeblocks/createTimeblock',
   async (timeblock: Omit<TimeblockInsert, 'user_id'>, { rejectWithValue }) => {
@@ -84,12 +102,15 @@ export const createTimeblock = createAsyncThunk(
 
       if (error) throw error;
       return data as Timeblock;
-    } catch (error: any) {
-      return rejectWithValue(error.message);
+    } catch (error) {
+      return rejectWithValue((error as Error).message);
     }
   }
 );
 
+/**
+ * Updates an existing timeblock.
+ */
 export const updateTimeblock = createAsyncThunk(
   'timeblocks/updateTimeblock',
   async ({ id, updates }: { id: string; updates: TimeblockUpdate }, { rejectWithValue }) => {
@@ -107,12 +128,15 @@ export const updateTimeblock = createAsyncThunk(
 
       if (error) throw error;
       return data as Timeblock;
-    } catch (error: any) {
-      return rejectWithValue(error.message);
+    } catch (error) {
+      return rejectWithValue((error as Error).message);
     }
   }
 );
 
+/**
+ * Deletes a timeblock by ID.
+ */
 export const deleteTimeblock = createAsyncThunk(
   'timeblocks/deleteTimeblock',
   async (id: string, { rejectWithValue }) => {
@@ -128,12 +152,15 @@ export const deleteTimeblock = createAsyncThunk(
 
       if (error) throw error;
       return id;
-    } catch (error: any) {
-      return rejectWithValue(error.message);
+    } catch (error) {
+      return rejectWithValue((error as Error).message);
     }
   }
 );
 
+/**
+ * Moves a timeblock to a new time/date (used for drag-and-drop).
+ */
 export const moveTimeblock = createAsyncThunk(
   'timeblocks/moveTimeblock',
   async ({ id, startTime, endTime, date }: { id: string; startTime: string; endTime: string; date?: string }, { rejectWithValue }) => {
@@ -154,12 +181,16 @@ export const moveTimeblock = createAsyncThunk(
 
       if (error) throw error;
       return data as Timeblock;
-    } catch (error: any) {
-      return rejectWithValue(error.message);
+    } catch (error) {
+      return rejectWithValue((error as Error).message);
     }
   }
 );
 
+/**
+ * Timeblocks slice
+ * Manages the user's schedule.
+ */
 const timeblocksSlice = createSlice({
   name: 'timeblocks',
   initialState,
@@ -269,15 +300,43 @@ const timeblocksSlice = createSlice({
 export const { setSelectedDate, clearError, optimisticMoveTimeblock } = timeblocksSlice.actions;
 export default timeblocksSlice.reducer;
 
-// Selectors
-export const selectTimeblocks = (state: RootState) => state.timeblocks.timeblocks;
-export const selectSelectedDate = (state: RootState) => state.timeblocks.selectedDate;
-export const selectTimeblocksLoading = (state: RootState) => state.timeblocks.loading;
-export const selectTimeblocksError = (state: RootState) => state.timeblocks.error;
+// --- Selectors ---
 
-export const selectTimeblocksByDate = (date: string) => (state: RootState) =>
-  state.timeblocks.timeblocks.filter(tb => tb.date === date);
+const selectTimeblocksState = (state: RootState) => state.timeblocks;
 
+export const selectTimeblocks = createSelector(
+  [selectTimeblocksState],
+  (state) => state.timeblocks
+);
+
+export const selectSelectedDate = createSelector(
+  [selectTimeblocksState],
+  (state) => state.selectedDate
+);
+
+export const selectTimeblocksLoading = createSelector(
+  [selectTimeblocksState],
+  (state) => state.loading
+);
+
+export const selectTimeblocksError = createSelector(
+  [selectTimeblocksState],
+  (state) => state.error
+);
+
+// Memoized selector for filtering by date
+export const selectTimeblocksByDate = (date: string) => createSelector(
+  [selectTimeblocks],
+  (timeblocks) => timeblocks.filter(tb => tb.date === date)
+);
+
+// Memoized selector for the currently selected date's timeblocks
+export const selectSelectedDateTimeblocks = createSelector(
+  [selectTimeblocks, selectSelectedDate],
+  (timeblocks, selectedDate) => timeblocks.filter(tb => tb.date === selectedDate)
+);
+
+// Helper for today's timeblocks (note: 'today' changes, so be careful with memoization if date changes)
 export const selectTodaysTimeblocks = (state: RootState) => {
   const today = new Date().toISOString().split('T')[0];
   return state.timeblocks.timeblocks.filter(tb => tb.date === today);

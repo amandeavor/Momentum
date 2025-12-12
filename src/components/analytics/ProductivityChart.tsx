@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Dimensions, Pressable } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import Card from '@/components/common/Card';
@@ -19,16 +19,26 @@ interface ProductivityChartProps {
 const ProductivityChart: React.FC<ProductivityChartProps> = ({ data }) => {
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const maxMinutes = Math.max(...data.map(d => d.minutes), 60); // At least 60m scale
+  const barWidth = 28;
 
-  const { width } = Dimensions.get('window');
-  const chartWidth = width - spacing.lg * 4;
-  const barWidth = Math.min(chartWidth / data.length - spacing.sm, 32);
-  const today = new Date().getDay();
-  const dayIndex = today === 0 ? 6 : today - 1; // Convert to Mon=0, Sun=6
+  // Get today's day name to match with data
+  const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const todayName = days[new Date().getDay()];
 
   const handlePress = (index: number) => {
     setSelectedIndex(index === selectedIndex ? null : index);
   };
+
+  // Find today's index in the data
+  const todayIndex = data.findIndex(d => d.day === todayName);
+
+  // Calculate display values
+  const displayIndex = selectedIndex !== null ? selectedIndex : todayIndex;
+  const displayItem = displayIndex >= 0 && displayIndex < data.length ? data[displayIndex] : null;
+  const displayMinutes = displayItem?.minutes ?? 0;
+  const displayHours = Math.floor(displayMinutes / 60);
+  const displayMins = displayMinutes % 60;
+  const timeDisplay = displayMinutes === 0 ? '0m' : displayHours > 0 ? `${displayHours}h ${displayMins}m` : `${displayMins}m`;
 
   return (
     <Card variant="surface" padding="lg">
@@ -37,12 +47,7 @@ const ProductivityChart: React.FC<ProductivityChartProps> = ({ data }) => {
           <Text style={styles.totalLabel}>
             {selectedIndex !== null ? data[selectedIndex].day : 'Today'}
           </Text>
-          <Text style={styles.totalValue}>
-            {selectedIndex !== null
-              ? `${Math.floor(data[selectedIndex].minutes / 60)}h ${data[selectedIndex].minutes % 60}m`
-              : `${Math.floor(data[dayIndex]?.minutes / 60 || 0)}h ${data[dayIndex]?.minutes % 60 || 0}m`
-            }
-          </Text>
+          <Text style={styles.totalValue}>{timeDisplay}</Text>
         </View>
         <View style={styles.legend}>
           <View style={styles.legendDot} />
@@ -60,16 +65,16 @@ const ProductivityChart: React.FC<ProductivityChartProps> = ({ data }) => {
 
         <View style={styles.bars}>
           {data.map((item, index) => {
-            const isToday = index === dayIndex;
+            const isToday = item.day === todayName;
             const isSelected = selectedIndex === index;
-            // Ensure at least a tiny sliver is visible so it's tappable
             const barHeightPercentage = Math.max((item.minutes / maxMinutes) * 100, 4);
 
             return (
-              <Pressable
+              <TouchableOpacity
                 key={index}
                 style={styles.barWrapper}
                 onPress={() => handlePress(index)}
+                activeOpacity={0.7}
               >
                 <View style={styles.barBackground}>
                   <Animated.View
@@ -98,7 +103,7 @@ const ProductivityChart: React.FC<ProductivityChartProps> = ({ data }) => {
                   isToday && styles.labelToday,
                   isSelected && styles.labelSelected
                 ]}>{item.day}</Text>
-              </Pressable>
+              </TouchableOpacity>
             );
           })}
         </View>
@@ -112,7 +117,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: spacing.xl,
+    marginBottom: spacing.md,
   },
   totalLabel: {
     ...typography.caption,
@@ -146,13 +151,13 @@ const styles = StyleSheet.create({
     color: colors.dark.textSecondary,
   },
   chartContainer: {
-    height: 180,
+    height: 140,
     position: 'relative',
   },
   gridLines: {
     position: 'absolute',
     top: 0,
-    bottom: 24, // Leave space for labels
+    bottom: 24,
     left: 0,
     right: 0,
     justifyContent: 'space-between',
@@ -167,7 +172,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-end',
-    paddingBottom: 4, // Slight bottom padding
+    paddingBottom: 4,
   },
   barWrapper: {
     alignItems: 'center',

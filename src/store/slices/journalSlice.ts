@@ -3,7 +3,9 @@ import { supabase } from '@/services/supabase';
 import { Journal, JournalInsert, JournalUpdate, Database } from '@/types/database';
 import { RootState } from '../index';
 
-// Mood options
+/**
+ * Predefined mood options for journal entries.
+ */
 export const MOOD_OPTIONS = [
   { emoji: '😊', label: 'Happy', rating: 5 },
   { emoji: '🙂', label: 'Good', rating: 4 },
@@ -12,12 +14,21 @@ export const MOOD_OPTIONS = [
   { emoji: '😢', label: 'Sad', rating: 1 },
 ] as const;
 
+/**
+ * State definition for the Journal module.
+ */
 interface JournalState {
+  /** List of all journal entries for the current user */
   entries: Journal[];
+  /** The currently selected or active entry (for viewing/editing) */
   currentEntry: Journal | null;
+  /** Loading state for fetching entries */
   loading: boolean;
+  /** Syncing state for mutations (create/update/delete) */
   syncing: boolean;
+  /** Error message if any operation fails */
   error: string | null;
+  /** Timestamp of last successful sync */
   lastSynced: string | null;
 }
 
@@ -30,7 +41,9 @@ const initialState: JournalState = {
   lastSynced: null,
 };
 
-// Helper to get date range
+/**
+ * Helper to get a date string for N days ago.
+ */
 const getDateRange = (days: number) => {
   const now = new Date();
   now.setDate(now.getDate() - days);
@@ -38,9 +51,12 @@ const getDateRange = (days: number) => {
   return now.toISOString();
 };
 
-// Async thunks
+// --- Async Thunks ---
 
-// Fetch journal entries
+/**
+ * Fetches journal entries for the authenticated user.
+ * Supports an optional limit (default 50).
+ */
 export const fetchJournals = createAsyncThunk<
   Journal[],
   { limit?: number } | undefined,
@@ -52,16 +68,16 @@ export const fetchJournals = createAsyncThunk<
     try {
       const state = getState();
       const userId = state.auth.user?.id;
-      
+
       if (!userId) throw new Error('Not authenticated');
-      
+
       const { data, error } = await supabase
         .from('journals')
         .select('*')
         .eq('user_id', userId)
         .order('created_at', { ascending: false })
         .limit(limit);
-      
+
       if (error) throw error;
       return data as Journal[];
     } catch (error) {
@@ -70,7 +86,10 @@ export const fetchJournals = createAsyncThunk<
   }
 );
 
-// Fetch recent entries (last 7 days)
+/**
+ * Fetches journal entries created within the last 7 days.
+ * Useful for streak calculation and weekly views.
+ */
 export const fetchRecentJournals = createAsyncThunk<
   Journal[],
   void,
@@ -81,16 +100,16 @@ export const fetchRecentJournals = createAsyncThunk<
     try {
       const state = getState();
       const userId = state.auth.user?.id;
-      
+
       if (!userId) throw new Error('Not authenticated');
-      
+
       const { data, error } = await supabase
         .from('journals')
         .select('*')
         .eq('user_id', userId)
         .gte('created_at', getDateRange(7))
         .order('created_at', { ascending: false });
-      
+
       if (error) throw error;
       return data as Journal[];
     } catch (error) {
@@ -99,7 +118,9 @@ export const fetchRecentJournals = createAsyncThunk<
   }
 );
 
-// Create a new journal entry
+/**
+ * Creates a new journal entry in Supabase.
+ */
 export const createJournal = createAsyncThunk<
   Journal,
   Omit<JournalInsert, 'user_id'>,
@@ -110,19 +131,19 @@ export const createJournal = createAsyncThunk<
     try {
       const state = getState();
       const userId = state.auth.user?.id;
-      
+
       if (!userId) throw new Error('Not authenticated');
-      
+
       const insertData: Database['public']['Tables']['journals']['Insert'] = {
         ...entry,
         user_id: userId,
       };
-      
+
       const { data, error } = await (supabase.from('journals') as any)
         .insert(insertData)
         .select()
         .single();
-      
+
       if (error) throw error;
       return data as Journal;
     } catch (error) {
@@ -131,7 +152,9 @@ export const createJournal = createAsyncThunk<
   }
 );
 
-// Update a journal entry
+/**
+ * Updates an existing journal entry.
+ */
 export const updateJournal = createAsyncThunk<
   Journal,
   { id: string; updates: JournalUpdate },
@@ -141,13 +164,13 @@ export const updateJournal = createAsyncThunk<
   async ({ id, updates }, { rejectWithValue }) => {
     try {
       const updateData: Database['public']['Tables']['journals']['Update'] = updates;
-      
+
       const { data, error } = await (supabase.from('journals') as any)
         .update(updateData)
         .eq('id', id)
         .select()
         .single();
-      
+
       if (error) throw error;
       return data as Journal;
     } catch (error) {
@@ -156,7 +179,9 @@ export const updateJournal = createAsyncThunk<
   }
 );
 
-// Delete a journal entry
+/**
+ * Deletes a journal entry permanently.
+ */
 export const deleteJournal = createAsyncThunk(
   'journal/deleteJournal',
   async (id: string, { rejectWithValue }) => {
@@ -165,7 +190,7 @@ export const deleteJournal = createAsyncThunk(
         .from('journals')
         .delete()
         .eq('id', id);
-      
+
       if (error) throw error;
       return id;
     } catch (error) {
@@ -174,7 +199,9 @@ export const deleteJournal = createAsyncThunk(
   }
 );
 
-// Fetch a single journal by ID
+/**
+ * Fetches a single journal entry by its ID.
+ */
 export const fetchJournalById = createAsyncThunk<
   Journal,
   string,
@@ -188,7 +215,7 @@ export const fetchJournalById = createAsyncThunk<
         .select('*')
         .eq('id', id)
         .single();
-      
+
       if (error) throw error;
       return data as Journal;
     } catch (error) {
@@ -197,7 +224,10 @@ export const fetchJournalById = createAsyncThunk<
   }
 );
 
-// Journal slice
+/**
+ * Journal Slice
+ * Handles state management for user journal entries.
+ */
 const journalSlice = createSlice({
   name: 'journal',
   initialState,
@@ -252,7 +282,7 @@ const journalSlice = createSlice({
       .addCase(fetchRecentJournals.fulfilled, (state, action) => {
         // Merge with existing entries, avoiding duplicates
         const existingIds = new Set(state.entries.map(e => e.id));
-        state.entries = [...action.payload, ...state.entries.filter(e => 
+        state.entries = [...action.payload, ...state.entries.filter(e =>
           !action.payload.some(ne => ne.id === e.id)
         )];
       });
@@ -334,25 +364,31 @@ export const deleteEntry = deleteJournal;
 
 export default journalSlice.reducer;
 
-// Selectors
+// --- Selectors ---
+
 export const selectAllJournals = (state: RootState) => state.journal.entries;
 export const selectCurrentJournal = (state: RootState) => state.journal.currentEntry;
 export const selectJournalLoading = (state: RootState) => state.journal.loading;
 export const selectJournalSyncing = (state: RootState) => state.journal.syncing;
 
-// Select entries by date (for calendar view)
+/**
+ * Select entries by date. Useful for daily view or calendar.
+ */
 export const selectJournalsByDate = (date: string) => (state: RootState) => {
   const targetDate = new Date(date).toDateString();
-  return state.journal.entries.filter(e => 
+  return state.journal.entries.filter(e =>
     new Date(e.created_at).toDateString() === targetDate
   );
 };
 
-// Get mood trend for last N days
+/**
+ * Get mood trend for use in charts.
+ * Returns array of objects with date, mood rating, and emoji.
+ */
 export const selectMoodTrend = (days: number) => (state: RootState) => {
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - days);
-  
+
   return state.journal.entries
     .filter(e => new Date(e.created_at) >= cutoff && e.mood_rating)
     .map(e => ({

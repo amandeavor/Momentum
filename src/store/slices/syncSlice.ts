@@ -1,16 +1,30 @@
-import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
+import { createSlice, createAsyncThunk, PayloadAction, createSelector } from '@reduxjs/toolkit';
 import { supabase } from '@/services/supabase';
 import { SyncQueueItem, SyncQueueInsert, Json } from '@/types/database';
 import { RootState } from '../index';
 
-// Sync operation types
+/**
+ * Type of operation being synced.
+ */
 export type SyncOperation = 'insert' | 'update' | 'delete';
+
+/**
+ * Tables that support offline sync.
+ */
 export type SyncTable = 'todos' | 'pomodoro_sessions' | 'journals' | 'streaks' | 'timeblocks' | 'habits' | 'habit_completions';
 
-// Conflict resolution strategies
+/**
+ * Strategy to resolve data conflicts.
+ * - 'last-write-wins': Most recent timestamp wins.
+ * - 'server-wins': Server data is authoritative.
+ * - 'client-wins': Local data overwrites server.
+ * - 'merge': Smart merge depending on data type.
+ */
 export type ConflictStrategy = 'last-write-wins' | 'server-wins' | 'client-wins' | 'merge';
 
-// Sync queue item for local storage
+/**
+ * Item in the local sync queue.
+ */
 interface LocalSyncItem {
   id: string;
   operation: SyncOperation;
@@ -24,7 +38,9 @@ interface LocalSyncItem {
   version?: number; // For optimistic locking
 }
 
-// Sync state
+/**
+ * State definition for the Sync module.
+ */
 interface SyncState {
   // Connection status
   isOnline: boolean;
@@ -136,9 +152,12 @@ const mergePayloads = (local: Json, server: Json, table: SyncTable): Json => {
   };
 };
 
-// Async thunks
+// --- Async Thunks ---
 
-// Process the sync queue
+/**
+ * Processes the sync queue.
+ * Handles insert/update/delete operations and conflict resolution.
+ */
 export const processSyncQueue = createAsyncThunk(
   'sync/processQueue',
   async (_, { getState, dispatch, rejectWithValue }) => {
@@ -293,7 +312,9 @@ async function processSyncItem(item: LocalSyncItem): Promise<{ success: boolean;
   }
 }
 
-// Sync all data from server
+/**
+ * Downloads all data for supported tables from the server.
+ */
 export const syncFromServer = createAsyncThunk(
   'sync/syncFromServer',
   async (tables: SyncTable[], { getState, rejectWithValue }) => {
@@ -322,7 +343,10 @@ export const syncFromServer = createAsyncThunk(
   }
 );
 
-// Sync slice
+/**
+ * Sync Slice
+ * Manages offline synchronization queue and status.
+ */
 const syncSlice = createSlice({
   name: 'sync',
   initialState,
@@ -536,14 +560,38 @@ export const {
 
 export default syncSlice.reducer;
 
-// Selectors
-export const selectIsOnline = (state: RootState) => state.sync.isOnline;
-export const selectIsSyncing = (state: RootState) => state.sync.isSyncing;
-export const selectSyncQueue = (state: RootState) => state.sync.queue;
-export const selectPendingCount = (state: RootState) => state.sync.queue.length;
-export const selectLastSyncedAt = (state: RootState) => state.sync.lastSyncedAt;
-export const selectSyncErrors = (state: RootState) => state.sync.syncErrors;
+// --- Selectors ---
+
+const selectSyncState = (state: RootState) => state.sync;
+
+export const selectIsOnline = createSelector(
+  [selectSyncState],
+  (sync) => sync.isOnline
+);
+export const selectIsSyncing = createSelector(
+  [selectSyncState],
+  (sync) => sync.isSyncing
+);
+export const selectSyncQueue = createSelector(
+  [selectSyncState],
+  (sync) => sync.queue
+);
+export const selectPendingCount = createSelector(
+  [selectSyncState],
+  (sync) => sync.queue.length
+);
+export const selectLastSyncedAt = createSelector(
+  [selectSyncState],
+  (sync) => sync.lastSyncedAt
+);
+export const selectSyncErrors = createSelector(
+  [selectSyncState],
+  (sync) => sync.syncErrors
+);
 
 // Table-specific pending counts
-export const selectTablePendingCount = (table: SyncTable) => (state: RootState) =>
-  state.sync.tableStatus[table].pendingCount;
+export const selectTablePendingCount = (table: SyncTable) =>
+  createSelector(
+    [selectSyncState],
+    (sync) => sync.tableStatus[table]?.pendingCount || 0
+  );

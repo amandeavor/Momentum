@@ -1,221 +1,247 @@
 import React, { useMemo } from 'react';
-import { View, Text, StyleSheet, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { useAppSelector } from '@/store';
 import { selectActivityDates } from '@/store/slices/analyticsSlice';
 import { colors } from '@/theme/colors';
 import { spacing, radii } from '@/theme/spacing';
-import { typography } from '@/theme/typography';
 import Card from '@/components/common/Card';
 
-const DAYS = 7;
-const WEEKS = 12; // Last 12 weeks (~3 months)
+const WEEKS = 12; // Show 12 weeks (~3 months)
 const CELL_SIZE = 14;
-const CELL_GAP = 5;
+const CELL_GAP = 4;
 
 const StreakHeatmap = () => {
     const activityDates = useAppSelector(selectActivityDates);
-    const { width } = Dimensions.get('window');
 
-    // Generate grid data
-    const gridData = useMemo(() => {
+    // Generate grid data - organized by weeks (columns) with days (rows)
+    const { columns, monthLabels, stats } = useMemo(() => {
         const today = new Date();
-        // Adjust to end on Saturday/Sunday depending on locale, for now end on Today
-        const data = [];
+        const data: { date: Date; dateStr: string; level: number; isToday: boolean }[] = [];
+        const todayStr = today.toISOString().split('T')[0];
 
-        // We want to show WEEKS * 7 days
-        for (let i = (DAYS * WEEKS) - 1; i >= 0; i--) {
+        // Go back WEEKS * 7 days
+        for (let i = (7 * WEEKS) - 1; i >= 0; i--) {
             const date = new Date(today);
             date.setDate(date.getDate() - i);
             const dateStr = date.toISOString().split('T')[0];
-
-            // Check activity level based on multiple entries? 
-            // Currently activityDates is just a set of dates with ANY activity.
-            // So level is binary: 0 or 1. If we want intensity, we need more data.
-            // For now, let's stick to binary or simple presence.
             const hasActivity = activityDates.includes(dateStr);
 
             data.push({
                 date,
                 dateStr,
-                level: hasActivity ? 1 : 0
+                level: hasActivity ? 1 : 0,
+                isToday: dateStr === todayStr
             });
         }
-        return data;
-    }, [activityDates]);
 
-    // Group by columns (weeks)
-    const columns = useMemo(() => {
-        const cols = [];
-        for (let i = 0; i < gridData.length; i += 7) {
-            cols.push(gridData.slice(i, i + 7));
+        // Group into weeks (columns of 7 days each)
+        const cols: typeof data[] = [];
+        for (let i = 0; i < data.length; i += 7) {
+            cols.push(data.slice(i, i + 7));
         }
-        return cols;
-    }, [gridData]);
 
-    const monthLabels = useMemo(() => {
+        // Generate month labels
         const labels: { text: string; x: number }[] = [];
         let currentMonth = -1;
-
-        columns.forEach((week, index) => {
-            const firstDayOfWeek = week[0].date;
-            const month = firstDayOfWeek.getMonth();
-
-            if (month !== currentMonth) {
-                currentMonth = month;
-                // Only show label if there's enough space (e.g., at least 2 weeks of this month visible)
-                // Simplified: just add label
-                labels.push({
-                    text: firstDayOfWeek.toLocaleString('default', { month: 'short' }),
-                    x: index * (CELL_SIZE + CELL_GAP)
-                });
+        cols.forEach((week, index) => {
+            const firstDay = week[0]?.date;
+            if (firstDay) {
+                const month = firstDay.getMonth();
+                if (month !== currentMonth) {
+                    currentMonth = month;
+                    labels.push({
+                        text: firstDay.toLocaleString('default', { month: 'short' }),
+                        x: index * (CELL_SIZE + CELL_GAP)
+                    });
+                }
             }
         });
-        return labels;
-    }, [columns]);
+
+        // Calculate stats
+        const activeDays = data.filter(d => d.level > 0).length;
+        const currentStreak = calculateCurrentStreak(data);
+
+        return {
+            columns: cols,
+            monthLabels: labels,
+            stats: { activeDays, currentStreak }
+        };
+    }, [activityDates]);
 
     return (
-        <Card variant="surface" padding="lg">
+        <Card variant="surface" padding="md">
             <View style={styles.container}>
                 {/* Header */}
                 <View style={styles.header}>
-                    <View>
-                        <Text style={styles.statsValue}>{activityDates.length}</Text>
-                        <Text style={styles.statsLabel}>Active days</Text>
+                    <View style={styles.statsContainer}>
+                        <View style={styles.statItem}>
+                            <Text style={styles.statValue}>{stats.activeDays}</Text>
+                            <Text style={styles.statLabel}>active days</Text>
+                        </View>
+                        <View style={styles.statDivider} />
+                        <View style={styles.statItem}>
+                            <Text style={styles.statValue}>{stats.currentStreak}</Text>
+                            <Text style={styles.statLabel}>current streak</Text>
+                        </View>
                     </View>
                     <View style={styles.legend}>
-                        <View style={styles.legendItem}>
-                            <View style={[styles.legendDot, styles.legendDotInactive]} />
-                            <Text style={styles.legendText}>No activity</Text>
-                        </View>
-                        <View style={styles.legendItem}>
-                            <View style={[styles.legendDot, styles.legendDotActive]} />
-                            <Text style={styles.legendText}>Active</Text>
-                        </View>
+                        <Text style={styles.legendLabel}>Less</Text>
+                        <View style={[styles.legendCell, styles.cellInactive]} />
+                        <View style={[styles.legendCell, styles.cellActive]} />
+                        <Text style={styles.legendLabel}>More</Text>
                     </View>
                 </View>
 
-                {/* Month Labels */}
-                <View style={styles.monthRow}>
-                    {monthLabels.map((label, i) => (
-                        <Text
-                            key={i}
-                            style={[styles.monthLabel, { left: label.x }]}
-                        >
-                            {label.text}
-                        </Text>
-                    ))}
-                </View>
-
-                <View style={styles.gridContainer}>
-                    {/* Day Labels (Mon/Wed/Fri) */}
+                {/* Grid */}
+                <View style={styles.gridWrapper}>
+                    {/* Day labels */}
                     <View style={styles.dayLabels}>
-                        <Text style={styles.dayLabel}>M</Text>
-                        <Text style={styles.dayLabel}>W</Text>
-                        <Text style={styles.dayLabel}>F</Text>
+                        <Text style={styles.dayLabel}>Mon</Text>
+                        <Text style={styles.dayLabel}>Wed</Text>
+                        <Text style={styles.dayLabel}>Fri</Text>
                     </View>
 
-                    {/* Heatmap Grid */}
-                    <View style={styles.grid}>
-                        {columns.map((week, colIndex) => (
-                            <View key={colIndex} style={styles.column}>
-                                {week.map((day, rowIndex) => (
-                                    <View
-                                        key={day.dateStr}
-                                        style={[
-                                            styles.cell,
-                                            day.level > 0 && styles.cellActive
-                                        ]}
-                                    />
+                    {/* Scrollable grid */}
+                    <ScrollView
+                        horizontal
+                        showsHorizontalScrollIndicator={false}
+                        style={styles.scrollView}
+                        contentContainerStyle={styles.scrollContent}
+                        nestedScrollEnabled={true}
+                    >
+                        <View>
+                            {/* Month labels */}
+                            <View style={styles.monthRow}>
+                                {monthLabels.map((label, i) => (
+                                    <Text
+                                        key={i}
+                                        style={[styles.monthLabel, { left: label.x }]}
+                                    >
+                                        {label.text}
+                                    </Text>
                                 ))}
                             </View>
-                        ))}
-                    </View>
+
+                            {/* Cells grid */}
+                            <View style={styles.grid}>
+                                {columns.map((week, colIndex) => (
+                                    <View key={colIndex} style={styles.column}>
+                                        {week.map((day) => (
+                                            <View
+                                                key={day.dateStr}
+                                                style={[
+                                                    styles.cell,
+                                                    day.level > 0 ? styles.cellActive : styles.cellInactive,
+                                                    day.isToday && styles.cellToday
+                                                ]}
+                                            />
+                                        ))}
+                                    </View>
+                                ))}
+                            </View>
+                        </View>
+                    </ScrollView>
                 </View>
 
-                <View style={styles.footer}>
-                    <Text style={styles.footerText}>Last {WEEKS} weeks</Text>
-                </View>
+                {/* Footer */}
+                <Text style={styles.footerText}>Last {WEEKS} weeks of activity</Text>
             </View>
         </Card>
     );
 };
 
+// Calculate current streak from grid data
+function calculateCurrentStreak(data: { dateStr: string; level: number }[]): number {
+    let streak = 0;
+    // Start from today and go backwards
+    for (let i = data.length - 1; i >= 0; i--) {
+        if (data[i].level > 0) {
+            streak++;
+        } else if (i < data.length - 1) {
+            // Allow today to be inactive (streak continues from yesterday)
+            break;
+        }
+    }
+    return streak;
+}
+
 const styles = StyleSheet.create({
     container: {
-        gap: spacing.md,
+        gap: spacing.sm,
     },
     header: {
         flexDirection: 'row',
         justifyContent: 'space-between',
-        alignItems: 'flex-start',
-        marginBottom: spacing.sm,
+        alignItems: 'center',
     },
-    statsValue: {
-        ...typography.styles.h2,
-        fontSize: 28,
-        color: colors.dark.text,
-        lineHeight: 32,
-    },
-    statsLabel: {
-        ...typography.styles.caption,
-        fontSize: 12,
-        color: colors.dark.textTertiary,
-        marginTop: 2,
-    },
-    legend: {
-        gap: spacing.sm,
-    },
-    legendItem: {
+    statsContainer: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 6,
+        gap: spacing.md,
     },
-    legendDot: {
+    statItem: {
+        alignItems: 'flex-start',
+    },
+    statValue: {
+        fontSize: 20,
+        fontWeight: '700',
+        color: colors.dark.text,
+    },
+    statLabel: {
+        fontSize: 11,
+        fontWeight: '500',
+        color: colors.dark.textTertiary,
+    },
+    statDivider: {
+        width: 1,
+        height: 24,
+        backgroundColor: colors.dark.whiteAlpha12,
+    },
+    legend: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+    },
+    legendLabel: {
+        fontSize: 10,
+        color: colors.dark.textTertiary,
+    },
+    legendCell: {
         width: 10,
         height: 10,
         borderRadius: 2,
     },
-    legendDotInactive: {
-        backgroundColor: colors.dark.whiteAlpha06,
-    },
-    legendDotActive: {
-        backgroundColor: colors.dark.pastelGreen,
-    },
-    legendText: {
-        ...typography.styles.caption,
-        fontSize: 11,
-        color: colors.dark.textTertiary,
-    },
-    monthRow: {
-        height: 18,
-        position: 'relative',
-        marginBottom: spacing.xs,
-        marginLeft: 20,
-    },
-    monthLabel: {
-        position: 'absolute',
-        ...typography.styles.caption,
-        fontSize: 10,
-        color: colors.dark.textTertiary,
-        fontWeight: '600',
-        textTransform: 'uppercase',
-    },
-    gridContainer: {
+    gridWrapper: {
         flexDirection: 'row',
     },
     dayLabels: {
-        width: 20,
+        width: 28,
         justifyContent: 'space-between',
-        paddingVertical: 2,
-        marginRight: spacing.xs,
+        paddingTop: 16, // Account for month labels
+        paddingBottom: 2,
     },
     dayLabel: {
-        ...typography.styles.caption,
         fontSize: 9,
+        fontWeight: '500',
         color: colors.dark.textTertiary,
-        height: CELL_SIZE + CELL_GAP,
-        lineHeight: CELL_SIZE + CELL_GAP,
+        height: (CELL_SIZE + CELL_GAP) * 2,
+    },
+    scrollView: {
+        flex: 1,
+    },
+    scrollContent: {
+        paddingRight: spacing.md,
+    },
+    monthRow: {
+        height: 14,
+        position: 'relative',
+        marginBottom: 2,
+    },
+    monthLabel: {
+        position: 'absolute',
+        fontSize: 10,
         fontWeight: '600',
+        color: colors.dark.textTertiary,
     },
     grid: {
         flexDirection: 'row',
@@ -227,26 +253,24 @@ const styles = StyleSheet.create({
     cell: {
         width: CELL_SIZE,
         height: CELL_SIZE,
-        borderRadius: 3,
+        borderRadius: 2,
+    },
+    cellInactive: {
         backgroundColor: colors.dark.whiteAlpha06,
     },
     cellActive: {
         backgroundColor: colors.dark.pastelGreen,
-        shadowColor: colors.dark.pastelGreen,
-        shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: 0.25,
-        shadowRadius: 3,
     },
-    footer: {
-        flexDirection: 'row',
-        justifyContent: 'flex-end',
-        marginTop: spacing.xs,
+    cellToday: {
+        borderWidth: 1,
+        borderColor: colors.dark.text,
     },
     footerText: {
-        ...typography.styles.caption,
         fontSize: 10,
         color: colors.dark.textTertiary,
-    }
+        textAlign: 'right',
+        marginTop: spacing.xs,
+    },
 });
 
 export default StreakHeatmap;

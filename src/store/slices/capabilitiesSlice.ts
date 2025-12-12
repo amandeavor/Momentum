@@ -1,4 +1,4 @@
-import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
+import { createSlice, createAsyncThunk, PayloadAction, createSelector } from '@reduxjs/toolkit';
 import { supabase } from '@/services/supabase';
 import { Capabilities, CapabilitiesUpdate, Database } from '@/types/database';
 import { RootState, AppDispatch } from '../index';
@@ -11,16 +11,25 @@ const DEFAULT_CAPABILITIES: Omit<Capabilities, 'id' | 'user_id' | 'created_at' |
   pinned_tabs: [],
 };
 
-// Tab identifiers
+/**
+ * Valid identifiers for main navigation tabs.
+ */
 export type TabId = 'home' | 'focus' | 'streaks' | 'journal' | 'social' | 'profile' | 'more';
 
+/**
+ * State definition for User Capabilities (feature flags & nav preferences).
+ */
 interface CapabilitiesState {
+  /** The user's capabilities record from DB. */
   capabilities: Capabilities | null;
+  /** Loading state for fetch/update operations. */
   loading: boolean;
+  /** Error message from last failed operation. */
   error: string | null;
 
-  // Computed navigation state
+  /** Computed list of visible tabs in the bottom navigation. */
   visibleTabs: TabId[];
+  /** Cached list of pinned tabs. */
   pinnedTabs: TabId[];
 }
 
@@ -66,9 +75,11 @@ const computeVisibleTabs = (caps: Capabilities | null): TabId[] => {
   return tabs;
 };
 
-// Async thunks
+// --- Async Thunks ---
 
-// Fetch user capabilities
+/**
+ * Fetches user capabilities from the database.
+ */
 export const fetchCapabilities = createAsyncThunk<
   Capabilities,
   void,
@@ -96,7 +107,9 @@ export const fetchCapabilities = createAsyncThunk<
   }
 );
 
-// Update capabilities
+/**
+ * Updates user capabilities (bulk update).
+ */
 export const updateCapabilities = createAsyncThunk<
   Capabilities,
   CapabilitiesUpdate,
@@ -126,7 +139,9 @@ export const updateCapabilities = createAsyncThunk<
   }
 );
 
-// Toggle a specific capability
+/**
+ * Toggles a specific capability on or off.
+ */
 export const toggleCapability = createAsyncThunk<
   Capabilities,
   keyof Pick<Capabilities, 'streaks_enabled' | 'friends_enabled' | 'notes_enabled'>,
@@ -161,7 +176,9 @@ export const toggleCapability = createAsyncThunk<
   }
 );
 
-// Pin/unpin a tab
+/**
+ * Pins or unpins a tab from the main navigation.
+ */
 export const togglePinnedTab = createAsyncThunk<
   Capabilities,
   TabId,
@@ -208,7 +225,10 @@ export const togglePinnedTab = createAsyncThunk<
   }
 );
 
-// Capabilities slice
+/**
+ * Capabilities slice
+ * Manages feature flags and navigation preferences.
+ */
 const capabilitiesSlice = createSlice({
   name: 'capabilities',
   initialState,
@@ -326,17 +346,42 @@ export const {
 
 export default capabilitiesSlice.reducer;
 
-// Selectors
-export const selectCapabilities = (state: RootState) => state.capabilities.capabilities;
-export const selectVisibleTabs = (state: RootState) => state.capabilities.visibleTabs;
-export const selectPinnedTabs = (state: RootState) => state.capabilities.pinnedTabs;
-export const selectCapabilitiesLoading = (state: RootState) => state.capabilities.loading;
+// --- Selectors ---
+
+const selectCapabilitiesState = (state: RootState) => state.capabilities;
+
+export const selectCapabilities = createSelector(
+  [selectCapabilitiesState],
+  (state) => state.capabilities
+);
+
+export const selectVisibleTabs = createSelector(
+  [selectCapabilitiesState],
+  (state) => state.visibleTabs
+);
+
+export const selectPinnedTabs = createSelector(
+  [selectCapabilitiesState],
+  (state) => state.pinnedTabs
+);
+
+export const selectCapabilitiesLoading = createSelector(
+  [selectCapabilitiesState],
+  (state) => state.loading
+);
 
 // Individual capability selectors
-export const selectStreaksEnabled = (state: RootState) =>
-  state.capabilities.capabilities?.streaks_enabled ?? true;
-export const selectFriendsEnabled = (state: RootState) =>
-  state.capabilities.capabilities?.friends_enabled ?? false;
-export const selectNotesEnabled = (state: RootState) =>
-  state.capabilities.capabilities?.notes_enabled ?? false;
+export const selectStreaksEnabled = createSelector(
+  [selectCapabilities],
+  (capabilities) => capabilities?.streaks_enabled ?? true
+);
 
+export const selectFriendsEnabled = createSelector(
+  [selectCapabilities],
+  (capabilities) => capabilities?.friends_enabled ?? false
+);
+
+export const selectNotesEnabled = createSelector(
+  [selectCapabilities],
+  (capabilities) => capabilities?.notes_enabled ?? false
+);
