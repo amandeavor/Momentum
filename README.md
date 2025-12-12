@@ -78,4 +78,6 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## 📄 License
 
-This project is licensed under the MIT License.
+Copyright (c) 2025 KonnichiwaAman. All rights reserved.
+Unauthorized copying, modification, distribution, or sale of this software, via any medium, is strictly prohibited.
+This project is proprietary and confidential.
