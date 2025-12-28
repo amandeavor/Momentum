@@ -21,6 +21,11 @@ import {
   completeSession,
   cancelSession,
   fetchFocusStats,
+  syncTimer,
+  selectLastUpdateTime,
+  selectPomodoroStatus,
+  selectRemainingSeconds,
+  selectIsBreak,
 } from '@/store/slices/pomodoroSlice';
 import { recordActivity } from '@/store/slices/analyticsSlice';
 import { selectActiveSession } from '@/store/selectors';
@@ -47,11 +52,23 @@ const PomodoroTimer: React.FC<PomodoroTimerProps> = ({
 }) => {
   const dispatch = useAppDispatch();
   const activeSession = useAppSelector(selectActiveSession);
+  const savedStatus = useAppSelector(selectPomodoroStatus);
+  const savedRemaining = useAppSelector(selectRemainingSeconds);
+  const savedIsBreak = useAppSelector(selectIsBreak);
+  const lastUpdateTime = useAppSelector(selectLastUpdateTime);
 
-  const [isBreak, setIsBreak] = useState(false);
+  // Initialize isBreak from Redux if available
+  const [isBreak, setIsBreak] = useState(savedIsBreak);
   const [localSessionsCompleted, setLocalSessionsCompleted] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const sessionStartTimeRef = useRef<number | null>(null);
+
+  // Update local isBreak if Redux changes (e.g. on reset)
+  useEffect(() => {
+    if (savedStatus === 'idle') {
+      setIsBreak(savedIsBreak);
+    }
+  }, [savedIsBreak, savedStatus]);
 
   // Use prop if provided, otherwise local
   const currentSets = completedSets > 0 ? completedSets : localSessionsCompleted;
@@ -61,13 +78,78 @@ const PomodoroTimer: React.FC<PomodoroTimerProps> = ({
   const activeBreakDuration = isLongBreak ? longBreakDuration : breakDuration;
   const breakSeconds = activeBreakDuration * 60;
 
+  // Initialize timer with drift correction logic
+  const getInitialTime = () => {
+    // If we have an active session OR we are in a break, try to resume
+    const shouldResume = (activeSession || savedIsBreak) && (savedStatus === 'running' || savedStatus === 'paused');
+
+    if (shouldResume) {
+       if (savedStatus === 'running' && lastUpdateTime) {
+         const elapsedSinceLastUpdate = Math.floor((Date.now() - lastUpdateTime) / 1000);
+         const correctedRemaining = Math.max(0, savedRemaining - elapsedSinceLastUpdate);
+         return correctedRemaining;
+       }
+       return savedRemaining;
+    }
+
+    return workSeconds;
+  };
+
   const {
     timeLeft: timeRemaining,
     isActive: isRunning,
     startTimer,
     stopTimer,
     setTime,
-  } = useFocusTimer(workSeconds);
+  } = useFocusTimer(getInitialTime());
+
+  // Auto-start if we resumed a running session
+  useEffect(() => {
+    const shouldResume = (activeSession || savedIsBreak) && savedStatus === 'running';
+    if (shouldResume && !isRunning && timeRemaining > 0) {
+       startTimer();
+    }
+  }, []);
+
+  // Ref to track latest time without triggering effect re-runs
+  const timeRemainingRef = useRef(timeRemaining);
+  const isRunningRef = useRef(isRunning);
+  const isBreakRef = useRef(isBreak);
+
+  useEffect(() => {
+    timeRemainingRef.current = timeRemaining;
+    isRunningRef.current = isRunning;
+    isBreakRef.current = isBreak;
+  }, [timeRemaining, isRunning, isBreak]);
+
+  // Sync with Redux periodically
+  useEffect(() => {
+    if (isRunning) {
+      const interval = setInterval(() => {
+        // Use ref to get latest time without restarting interval
+        dispatch(syncTimer({
+          remainingSeconds: timeRemainingRef.current,
+          status: 'running',
+          isBreak: isBreakRef.current
+        }));
+      }, 5000);
+      return () => clearInterval(interval);
+    }
+  }, [isRunning, dispatch]);
+
+  // Sync on unmount only if actually running
+  useEffect(() => {
+    return () => {
+      // Only sync if it was running at the moment of unmount
+      if (isRunningRef.current) {
+        dispatch(syncTimer({
+          remainingSeconds: timeRemainingRef.current,
+          status: 'running',
+          isBreak: isBreakRef.current
+        }));
+      }
+    };
+  }, [dispatch]);
 
   const playButtonScale = useSharedValue(1);
 
@@ -95,6 +177,9 @@ const PomodoroTimer: React.FC<PomodoroTimerProps> = ({
   useEffect(() => {
     if (timeRemaining === 0 && isRunning) {
       stopTimer();
+      // Sync one last time to ensure Redux knows it's 0
+      dispatch(syncTimer({ remainingSeconds: 0, status: 'idle' }));
+
       if (isBreak) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
         onBreakComplete?.();
@@ -144,6 +229,7 @@ const PomodoroTimer: React.FC<PomodoroTimerProps> = ({
     if (isRunning) {
       // Just pause the timer, don't cancel the session
       stopTimer();
+      dispatch(syncTimer({ remainingSeconds: timeRemaining, status: 'paused', isBreak }));
     } else {
       // Starting a new session
       if (!isBreak && !activeSession) {
@@ -155,6 +241,7 @@ const PomodoroTimer: React.FC<PomodoroTimerProps> = ({
           })).unwrap();
           sessionStartTimeRef.current = Date.now();
           startTimer();
+          dispatch(syncTimer({ remainingSeconds: workSeconds, status: 'running', isBreak: false }));
         } catch (error) {
           console.error('Failed to start session:', error);
         } finally {
@@ -164,12 +251,14 @@ const PomodoroTimer: React.FC<PomodoroTimerProps> = ({
         // Resume existing session
         sessionStartTimeRef.current = Date.now();
         startTimer();
+        dispatch(syncTimer({ remainingSeconds: timeRemaining, status: 'running', isBreak: false }));
       } else {
         // Break mode
         startTimer();
+        dispatch(syncTimer({ remainingSeconds: timeRemaining, status: 'running', isBreak: true }));
       }
     }
-  }, [isRunning, isBreak, activeSession, workDuration, breakDuration, startTimer, stopTimer, getElapsedMinutes, dispatch, isLoading]);
+  }, [isRunning, isBreak, activeSession, workDuration, breakDuration, startTimer, stopTimer, getElapsedMinutes, dispatch, isLoading, timeRemaining, workSeconds]);
 
   const handleReset = useCallback(async () => {
     if (isLoading) return;
