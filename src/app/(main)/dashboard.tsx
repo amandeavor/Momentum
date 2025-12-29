@@ -125,21 +125,13 @@ const Dashboard = () => {
 
   return (
     <View style={styles.container}>
-      {/* Multi-Layer Background Mesh */}
+      {/* Background - Minimalist Deep Depth */}
       <View style={StyleSheet.absoluteFill}>
-        {/* Top-Left Deep Blue Glow */}
         <LinearGradient
-          colors={['rgba(59,130,246,0.15)', 'transparent']}
-          style={[styles.backgroundMesh, { top: 0, left: 0, width: '100%', height: '60%' }]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-        />
-        {/* Bottom-Right Purple Glow */}
-        <LinearGradient
-          colors={['transparent', 'rgba(147,51,234,0.1)']}
-          style={[styles.backgroundMesh, { bottom: 0, right: 0, width: '100%', height: '50%' }]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
+          colors={['#0f1115', '#0b0b0d']}
+          style={StyleSheet.absoluteFill}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
         />
       </View>
 
@@ -211,7 +203,7 @@ const Dashboard = () => {
           <StatItem value={journalStreak} label="Streak" />
         </Animated.View>
 
-        {/* Primary Action - Electric Focus Hero */}
+        {/* Primary Action - Professional Focus Hero */}
         <Animated.View entering={FadeInDown.delay(200).duration(500)} style={styles.section}>
           <Pressable
             onPress={handleFocus}
@@ -220,21 +212,7 @@ const Dashboard = () => {
               pressed && { transform: [{ scale: 0.99 }] }
             ]}
           >
-            {/* Electric Gradient Border */}
-            <LinearGradient
-              colors={['rgba(59,130,246,0.5)', 'rgba(147,51,234,0.3)']}
-              style={StyleSheet.absoluteFill}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-            />
-            {/* Inner Content Mask */}
             <View style={styles.focusHeroInner}>
-              {/* Deep Inner Gradient */}
-              <LinearGradient
-                colors={['rgba(15,23,42,0.95)', 'rgba(15,23,42,0.8)']}
-                style={StyleSheet.absoluteFill}
-              />
-
               <View style={styles.focusHeroContent}>
                 <View>
                   <Text style={styles.focusHeroTitle}>Deep Focus</Text>
@@ -243,11 +221,7 @@ const Dashboard = () => {
                   </Text>
                 </View>
                 <View style={styles.playButton}>
-                  <LinearGradient
-                    colors={['#3b82f6', '#2563eb']}
-                    style={StyleSheet.absoluteFill}
-                  />
-                  <Ionicons name="play" size={20} color="#fff" />
+                  <Ionicons name="play" size={20} color={colors.dark.text} />
                 </View>
               </View>
             </View>
@@ -423,12 +397,12 @@ const styles = StyleSheet.create({
     height: 100,
     borderRadius: radii.xl,
     overflow: 'hidden',
-    padding: 1, // For border
+    backgroundColor: colors.dark.surface,
+    borderWidth: 1,
+    borderColor: colors.dark.border,
   },
   focusHeroInner: {
     flex: 1,
-    borderRadius: radii.xl - 1,
-    overflow: 'hidden',
     justifyContent: 'center',
   },
   focusHeroContent: {
@@ -456,12 +430,9 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     justifyContent: 'center',
     alignItems: 'center',
-    overflow: 'hidden',
-    shadowColor: "#3b82f6",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 8,
-    elevation: 8,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
   },
 
   // Bento Grid Layout Styles
