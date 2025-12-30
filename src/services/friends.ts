@@ -12,6 +12,7 @@ import {
   EncouragementInsert, 
   Profile 
 } from '@/types/database';
+import { logger } from '@/utils/logger';
 
 export interface FriendWithProfile extends Friendship {
   friend: Pick<Profile, 'id' | 'username' | 'display_name' | 'avatar_url'>;
@@ -42,7 +43,7 @@ export async function searchUsers(query: string): Promise<Profile[]> {
     .limit(10);
 
   if (error) {
-    console.error('Error searching users:', error);
+    logger.error('Error searching users:', error);
     return [];
   }
 
@@ -64,7 +65,7 @@ export async function getFriends(): Promise<FriendWithProfile[]> {
     .eq('status', 'accepted');
 
   if (error) {
-    console.error('Error fetching friends:', error);
+    logger.error('Error fetching friends:', error);
     throw error;
   }
 
@@ -86,7 +87,7 @@ export async function getPendingRequests(): Promise<FriendWithProfile[]> {
     .eq('status', 'pending');
 
   if (error) {
-    console.error('Error fetching pending requests:', error);
+    logger.error('Error fetching pending requests:', error);
     throw error;
   }
 
@@ -108,7 +109,7 @@ export async function getSentRequests(): Promise<FriendWithProfile[]> {
     .eq('status', 'pending');
 
   if (error) {
-    console.error('Error fetching sent requests:', error);
+    logger.error('Error fetching sent requests:', error);
     throw error;
   }
 
@@ -151,7 +152,7 @@ export async function sendFriendRequest(friendId: string): Promise<Friendship> {
     .single();
 
   if (error) {
-    console.error('Error sending friend request:', error);
+    logger.error('Error sending friend request:', error);
     throw error;
   }
 
@@ -172,7 +173,7 @@ export async function acceptFriendRequest(friendshipId: string): Promise<Friends
     .single();
 
   if (error) {
-    console.error('Error accepting friend request:', error);
+    logger.error('Error accepting friend request:', error);
     throw error;
   }
 
@@ -200,7 +201,7 @@ export async function declineFriendRequest(friendshipId: string): Promise<void> 
     .eq('friend_id', user.user.id);
 
   if (error) {
-    console.error('Error declining friend request:', error);
+    logger.error('Error declining friend request:', error);
     throw error;
   }
 }
@@ -217,7 +218,7 @@ export async function cancelFriendRequest(friendshipId: string): Promise<void> {
     .eq('user_id', user.user.id);
 
   if (error) {
-    console.error('Error canceling friend request:', error);
+    logger.error('Error canceling friend request:', error);
     throw error;
   }
 }
@@ -249,7 +250,7 @@ export async function removeFriend(friendshipId: string): Promise<void> {
     .or(`and(user_id.eq.${user.user.id},friend_id.eq.${friendId}),and(user_id.eq.${friendId},friend_id.eq.${user.user.id})`);
 
   if (error) {
-    console.error('Error removing friend:', error);
+    logger.error('Error removing friend:', error);
     throw error;
   }
 }
@@ -275,7 +276,7 @@ export async function blockUser(userId: string): Promise<void> {
     });
 
   if (error) {
-    console.error('Error blocking user:', error);
+    logger.error('Error blocking user:', error);
     throw error;
   }
 }
@@ -297,7 +298,7 @@ export async function updateStreakVisibility(
     .single();
 
   if (error) {
-    console.error('Error updating streak visibility:', error);
+    logger.error('Error updating streak visibility:', error);
     throw error;
   }
 
@@ -320,7 +321,7 @@ export async function getFriendsStreaks(): Promise<FriendStreak[]> {
     .eq('status', 'accepted');
 
   if (friendsError || !friendships) {
-    console.error('Error fetching friends for streaks:', friendsError);
+    logger.error('Error fetching friends for streaks:', friendsError);
     return [];
   }
 
@@ -335,7 +336,7 @@ export async function getFriendsStreaks(): Promise<FriendStreak[]> {
     .in('user_id', friendIds);
 
   if (streaksError || !streaks) {
-    console.error('Error fetching friend streaks:', streaksError);
+    logger.error('Error fetching friend streaks:', streaksError);
     return [];
   }
 
@@ -388,7 +389,7 @@ export async function sendEncouragement(
     .single();
 
   if (error) {
-    console.error('Error sending encouragement:', error);
+    logger.error('Error sending encouragement:', error);
     throw error;
   }
 
@@ -416,7 +417,7 @@ export async function getEncouragements(unreadOnly = false): Promise<Encourageme
   const { data, error } = await query.limit(50);
 
   if (error) {
-    console.error('Error fetching encouragements:', error);
+    logger.error('Error fetching encouragements:', error);
     throw error;
   }
 
@@ -435,7 +436,7 @@ export async function getUnreadEncouragementCount(): Promise<number> {
     .eq('read', false);
 
   if (error) {
-    console.error('Error counting unread encouragements:', error);
+    logger.error('Error counting unread encouragements:', error);
     return 0;
   }
 
@@ -454,7 +455,7 @@ export async function markEncouragementAsRead(encouragementId: string): Promise<
     .eq('to_user_id', user.user.id);
 
   if (error) {
-    console.error('Error marking encouragement as read:', error);
+    logger.error('Error marking encouragement as read:', error);
     throw error;
   }
 }
@@ -471,7 +472,7 @@ export async function markAllEncouragmentsAsRead(): Promise<void> {
     .eq('read', false);
 
   if (error) {
-    console.error('Error marking all encouragements as read:', error);
+    logger.error('Error marking all encouragements as read:', error);
     throw error;
   }
 }
