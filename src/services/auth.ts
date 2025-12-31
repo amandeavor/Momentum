@@ -2,6 +2,7 @@
 // See src/store/slices/authSlice.ts for actual implementation
 
 import { supabase } from './supabase';
+import { logger } from '../utils/logger';
 import type { User, Session } from '@supabase/supabase-js';
 
 export interface AuthResult {
@@ -14,7 +15,10 @@ export const login = async (email: string, password: string): Promise<AuthResult
     email,
     password,
   });
-  if (error) throw error;
+  if (error) {
+    logger.error('Login failed', error);
+    throw error;
+  }
   return { user: data.user, session: data.session };
 };
 
@@ -26,16 +30,25 @@ export const register = async (email: string, password: string, name: string): P
       data: { display_name: name },
     },
   });
-  if (error) throw error;
+  if (error) {
+    logger.error('Registration failed', error);
+    throw error;
+  }
   return { user: data.user, session: data.session };
 };
 
 export const forgotPassword = async (email: string): Promise<void> => {
   const { error } = await supabase.auth.resetPasswordForEmail(email);
-  if (error) throw error;
+  if (error) {
+    logger.error('Password reset request failed', error);
+    throw error;
+  }
 };
 
 export const logout = async (): Promise<void> => {
   const { error } = await supabase.auth.signOut();
-  if (error) throw error;
+  if (error) {
+    logger.error('Logout failed', error);
+    throw error;
+  }
 };
