@@ -1,0 +1,4 @@
+## 2025-05-21 - [CRITICAL] Unencrypted Auth State Persistence
+**Vulnerability:** Redux Persist was configured to whitelist the `auth` slice using `AsyncStorage`, which is unencrypted. This meant that Supabase session tokens (including access and refresh tokens) were being stored in plain text on the device, even though Supabase's own client tries to use `SecureStore`.
+**Learning:** Checking configuration files (like `redux-persist` setup) is just as important as checking implementation code. Duplicate persistence mechanisms can introduce vulnerabilities that one layer tries to avoid.
+**Prevention:** Always verify `whitelist`/`blacklist` configurations in state management libraries. For authentication state, ensure it is NOT persisted by generic unencrypted storage if a secure alternative (like `SecureStore` via Supabase) is already handling it. Explicitly comment *why* a sensitive slice is excluded.
