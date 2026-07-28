@@ -1,83 +1,54 @@
 # Momentum
 
-> **Master your time. Conquer your goals.**
+An Expo and React Native productivity application for tasks, habits, focus sessions, notes, goals, scheduling, and personal analytics.
 
-Momentum is a premium productivity application built with **React Native** and **Expo**. It combines task management, habit tracking, and focus timers into a single, beautiful interface designed to help you achieve peak performance.
+## Status
 
-## Features
+This is an in-progress mobile application. The repository includes Expo configuration and EAS build settings, but no current release artifact is linked here.
 
--   **Omni-Note System**: Capture ideas instantly with the Quick Notes feature.
--   **Intelligent Pomodoro**: Focus better with customizable work/break intervals and haptic feedback.
--   **Advanced Analytics**: Visualize your productivity with detailed charts, heatmaps, and "Peak Focus Hour" tracking.
--   **Goal & Task Management**: Organize your life with intuitive lists, deadlines, and priorities.
--   **Dark Mode First**: A stunning, battery-saving UI designed for focus.
--   **Secure & Sync**: Powered by Supabase for reliable cloud mastery.
+## Technology
 
-## Download
+- React Native, Expo, and TypeScript
+- Expo Router
+- Redux Toolkit and Redux Persist
+- Supabase client integration
 
-**Version 1.2.0** is out now!
-[**Download APK**](https://expo.dev/artifacts/eas/gbv3w9ig52LKLdN65pLzBa.apk)
+## Repository structure
 
-## Tech Stack
+- `src/app/`: application routes, authentication, onboarding, and primary screens
+- `src/components/`: reusable interface and feature components
+- `src/services/`: application services
+- `src/store/`: application state
+- `src/utils/`: shared utilities and configuration
 
--   **Framework**: React Native (Expo SDK 54)
--   **Language**: TypeScript
--   **State Management**: Redux Toolkit + Redux Persist
--   **Navigation**: Expo Router (File-based routing)
--   **Backend**: Supabase
--   **Styling**: Custom Design System (Dark/Light themes)
--   **Build Tool**: EAS Build
+## Local development
 
-## Getting Started
-
-### Prerequisites
--   Node.js (v18+)
--   Yarn (v1.22+)
--   Expo Go app on your physical device (optional)
-
-### Installation
-
-1.  **Clone the repository**
-    ```bash
-    git clone https://github.com/KonnichiwaAman/Momentum.git
-    cd momentum
-    ```
-
-2.  **Install dependencies**
-    ```bash
-    yarn install
-    ```
-
-3.  **Start the app**
-    ```bash
-    npx expo start
-    ```
-
-4.  **Run on Android**
-    -   Press `a` in the terminal to open in Android Emulator.
-    -   Or scan the QR code with **Expo Go**.
-
-## Building for Production
-
-To build the APK yourself using EAS:
+Prerequisites: Node.js and an Expo-compatible mobile development environment.
 
 ```bash
-# Install EAS CLI
-npm install -g eas-cli
-
-# Login
-eas login 
-
-# Build APK
-eas build --platform android --profile apk
+git clone https://github.com/amandeavor/Momentum.git
+cd Momentum
+npm install
+cp .env.example .env
+npm start
 ```
 
-## Contributing
+For a platform-specific development session:
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+```bash
+npm run android
+npm run ios
+npm run web
+```
+
+## Configuration
+
+Copy `.env.example` to `.env` and supply the Supabase project URL and public anonymous key required by the app. Do not commit local environment files.
+
+## Builds
+
+The repository includes `eas.json` for EAS Build configuration. Review the EAS project settings and environment values before producing a distributable build.
 
 ## License
 
-Copyright (c) 2025 KonnichiwaAman. All rights reserved.
-Unauthorized copying, modification, distribution, or sale of this software, via any medium, is strictly prohibited.
-This project is proprietary and confidential.
+No repository-level license file is currently included.
