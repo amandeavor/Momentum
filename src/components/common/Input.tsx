@@ -3,7 +3,6 @@ import {
   TextInput,
   StyleSheet,
   View,
-  Text,
   Pressable,
   ViewStyle,
   TextInputProps,
@@ -24,7 +23,6 @@ import { colors } from '@/theme/colors';
 import { spacing } from '@/theme/spacing';
 import { typography } from '@/theme/typography';
 
-const AnimatedView = Animated.createAnimatedComponent(View);
 
 export interface InputProps extends Omit<TextInputProps, 'style'> {
   label?: string;
@@ -146,6 +144,9 @@ const Input = forwardRef<TextInput, InputProps>(
               onPress={togglePasswordVisibility}
               style={styles.iconRight}
               hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel={isPasswordVisible ? 'Hide password' : 'Show password'}
+              accessibilityHint="Double tap to toggle password visibility"
             >
               <Ionicons
                 name={isPasswordVisible ? 'eye-off-outline' : 'eye-outline'}
