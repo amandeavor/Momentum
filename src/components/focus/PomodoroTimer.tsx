@@ -23,7 +23,7 @@ import {
   fetchFocusStats,
 } from '@/store/slices/pomodoroSlice';
 import { recordActivity } from '@/store/slices/analyticsSlice';
-import { selectActiveSession } from '@/store/selectors';
+import { selectActiveSession, selectBreakStartTime } from '@/store/selectors';
 import useFocusTimer from '@/hooks/useFocusTimer';
 
 interface PomodoroTimerProps {
@@ -47,6 +47,7 @@ const PomodoroTimer: React.FC<PomodoroTimerProps> = ({
 }) => {
   const dispatch = useAppDispatch();
   const activeSession = useAppSelector(selectActiveSession);
+  const breakStartTime = useAppSelector(selectBreakStartTime);
 
   const [isBreak, setIsBreak] = useState(false);
   const [localSessionsCompleted, setLocalSessionsCompleted] = useState(0);
@@ -61,13 +62,50 @@ const PomodoroTimer: React.FC<PomodoroTimerProps> = ({
   const activeBreakDuration = isLongBreak ? longBreakDuration : breakDuration;
   const breakSeconds = activeBreakDuration * 60;
 
+  // Calculate expected end time based on persisted start time (if any)
+  const getExpectedEndTime = () => {
+    // If break is active in Redux (which persists via storage), use that
+    if (breakStartTime) {
+      const startTime = new Date(breakStartTime).getTime();
+      return startTime + breakSeconds * 1000;
+    }
+    // If session is active in Redux
+    if (activeSession) {
+      const startTime = new Date(activeSession.started_at).getTime();
+      return startTime + activeSession.duration_minutes * 60 * 1000;
+    }
+    return null;
+  };
+
+  const expectedEndTime = getExpectedEndTime();
+
+  // If we have an expected end time, we should set the initial state to reflect that
+  // to avoid a flash of "default time" before the hook syncs.
+
   const {
     timeLeft: timeRemaining,
     isActive: isRunning,
     startTimer,
     stopTimer,
     setTime,
-  } = useFocusTimer(workSeconds);
+  } = useFocusTimer(workSeconds, expectedEndTime);
+
+  // Sync local isBreak state with Redux source of truth on mount/update
+  useEffect(() => {
+    if (breakStartTime) {
+      if (!isBreak) setIsBreak(true);
+    } else if (activeSession) {
+      if (isBreak) setIsBreak(false);
+    }
+  }, [breakStartTime, activeSession, isBreak]);
+
+  // Auto-start timer if we have an active session/break but timer isn't running
+  // This handles app resume from background or kill
+  useEffect(() => {
+    if (expectedEndTime && !isRunning && timeRemaining > 0) {
+      startTimer();
+    }
+  }, [expectedEndTime, isRunning, timeRemaining, startTimer]);
 
   const playButtonScale = useSharedValue(1);
 
