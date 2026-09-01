@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="docs/assets/social-preview.png" alt="Momentum: Plan. Focus. Keep moving." width="100%">
+
 # Momentum
 
 **A unified, minimalist mobile productivity suite for habits, tasks, focus, and personal analytics.**
