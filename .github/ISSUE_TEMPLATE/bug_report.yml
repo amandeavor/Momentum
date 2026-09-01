@@ -1,0 +1,30 @@
+name: Bug Report
+description: Report a bug or visual glitch in the Momentum mobile app
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for reporting an issue in Momentum.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem Description
+      description: Describe what happened and the expected behavior.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to Reproduce
+      description: Steps or actions taken before the issue occurred.
+    validations:
+      required: true
+  - type: textarea
+    id: device
+    attributes:
+      label: Device and OS
+      description: Device model, OS version, and Expo client version.
+      placeholder: "e.g. iPhone 15 Pro (iOS 17.5) or Pixel 8 (Android 14)"
+    validations:
+      required: true

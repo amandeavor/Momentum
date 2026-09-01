@@ -103,7 +103,7 @@ export default function ResetPasswordScreen() {
                         onPress={handleResetPassword}
                         loading={loading}
                         fullWidth
-                        style={[styles.button, { backgroundColor: '#fff' }]}
+                        style={{ ...styles.button, backgroundColor: '#fff' }}
                         textStyle={{ color: '#000', fontWeight: '600' }}
                     />
                 </View>

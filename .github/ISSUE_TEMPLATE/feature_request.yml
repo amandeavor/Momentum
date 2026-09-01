@@ -1,0 +1,15 @@
+name: Feature Request
+description: Propose a new habit, task, or focus feature
+labels: ["enhancement", "needs-discussion"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Propose an improvement for Momentum.
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: Describe the proposed capability.
+    validations:
+      required: true
