@@ -41,6 +41,13 @@ npm run ios
 npm run web
 ```
 
+## Quality commands
+
+```bash
+npm run typecheck
+npm run lint
+```
+
 ## Configuration
 
 Copy `.env.example` to `.env` and supply the Supabase project URL and public anonymous key required by the app. Do not commit local environment files.
@@ -49,6 +56,13 @@ Copy `.env.example` to `.env` and supply the Supabase project URL and public ano
 
 The repository includes `eas.json` for EAS Build configuration. Review the EAS project settings and environment values before producing a distributable build.
 
+## Contributing and Governance
+
+- [Contributing Guide](CONTRIBUTING.md)
+- [Security Policy](SECURITY.md)
+- [Roadmap](ROADMAP.md)
+- [Code of Conduct](CODE_OF_CONDUCT.md)
+
 ## License
 
-No repository-level license file is currently included.
+No repository-level license file is currently included. See the license decision issue for status.

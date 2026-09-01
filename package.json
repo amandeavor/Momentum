@@ -9,7 +9,9 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "tunnel": "expo start --tunnel"
+    "tunnel": "expo start --tunnel",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint ."
   },
   "dependencies": {
     "@expo-google-fonts/inter": "^0.4.2",
