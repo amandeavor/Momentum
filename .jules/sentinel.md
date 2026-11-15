@@ -1,0 +1,4 @@
+## 2026-01-17 - Insecure Session Storage in Redux Persist
+**Vulnerability:** Supabase session tokens (including access and refresh tokens) were being stored in unencrypted AsyncStorage via Redux Persist's whitelist configuration. This occurred because the `auth` slice was whitelisted, causing Redux Persist to save the state to AsyncStorage, bypassing Supabase's secure storage mechanisms.
+**Learning:** Redux Persist with AsyncStorage storage engine persists all whitelisted slices unencrypted. Even if an auth library (like Supabase) handles its own secure storage, mirroring that state in a persisted Redux slice without encryption creates a security hole.
+**Prevention:** Explicitly exclude auth-related slices from Redux Persist (`whitelist` management). Rely on the auth provider's secure storage and initialization logic (e.g., `onAuthStateChange` or explicit session recovery) to populate the store on app launch.
