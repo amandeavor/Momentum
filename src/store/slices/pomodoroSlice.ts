@@ -70,6 +70,8 @@ interface PomodoroState {
   sessionsUntilLongBreak: number;
 
   // State
+  /** Timestamp of the last successful timer sync/update. Used for drift correction. */
+  lastUpdateTime: number | null;
   loading: boolean;
   error: string | null;
 }
@@ -96,6 +98,7 @@ const initialState: PomodoroState = {
   setsCompleted: 0,
   sessionsUntilLongBreak: 4,
 
+  lastUpdateTime: null,
   loading: false,
   error: null,
 };
@@ -387,15 +390,29 @@ const pomodoroSlice = createSlice({
       }
     },
 
+    // Synchronize timer state from the UI component
+    syncTimer(state, action: PayloadAction<{ remainingSeconds: number; status?: SessionStatus; isBreak?: boolean }>) {
+      state.remainingSeconds = action.payload.remainingSeconds;
+      if (action.payload.status) {
+        state.status = action.payload.status;
+      }
+      if (action.payload.isBreak !== undefined) {
+        state.isBreak = action.payload.isBreak;
+      }
+      state.lastUpdateTime = Date.now();
+    },
+
     pause(state) {
       if (state.status === 'running') {
         state.status = 'paused';
+        state.lastUpdateTime = Date.now();
       }
     },
 
     resume(state) {
       if (state.status === 'paused') {
         state.status = 'running';
+        state.lastUpdateTime = Date.now();
       }
     },
 
@@ -424,6 +441,7 @@ const pomodoroSlice = createSlice({
       state.remainingSeconds = state.customFocusMinutes * 60;
       state.activeSession = null;
       state.linkedTodoId = null;
+      state.lastUpdateTime = null;
     },
 
     // Add time
@@ -588,6 +606,7 @@ export const {
   updateSettings,
   setLinkedTodo,
   tick,
+  syncTimer,
   pause,
   resume,
   startBreak,
@@ -615,6 +634,7 @@ export const selectTodayFocusMinutes = (state: RootState) => state.pomodoro.toda
 export const selectWeekFocusMinutes = (state: RootState) => state.pomodoro.weekFocusMinutes;
 export const selectWeekDailyBreakdown = (state: RootState) => state.pomodoro.weekDailyBreakdown;
 export const selectPomodoroLoading = (state: RootState) => state.pomodoro.loading;
+export const selectLastUpdateTime = (state: RootState) => state.pomodoro.lastUpdateTime;
 export const selectPomodoroError = (state: RootState) => state.pomodoro.error;
 export const selectLinkedTodoId = (state: RootState) => state.pomodoro.linkedTodoId;
 export const selectCurrentPreset = (state: RootState) => state.pomodoro.currentPreset;
