@@ -166,6 +166,11 @@ export const selectSetsCompleted = createSelector(
   (pomodoro) => pomodoro.setsCompleted
 );
 
+export const selectBreakStartTime = createSelector(
+  selectPomodoroState,
+  (pomodoro) => pomodoro.breakStartTime
+);
+
 // ============================================================================
 // Journal Selectors
 // ============================================================================

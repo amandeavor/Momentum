@@ -46,6 +46,8 @@ interface PomodoroState {
   remainingSeconds: number;
   /** Whether the timer is currently in a break phase. */
   isBreak: boolean;
+  /** Timestamp when the break started (for drift correction). */
+  breakStartTime: string | null;
   /** ID of the todo item linked to the current session (optional). */
   linkedTodoId: string | null;
 
@@ -84,6 +86,7 @@ const initialState: PomodoroState = {
   status: 'idle',
   remainingSeconds: 25 * 60,
   isBreak: false,
+  breakStartTime: null,
   linkedTodoId: null,
 
   sessions: [],
@@ -403,6 +406,7 @@ const pomodoroSlice = createSlice({
     startBreak(state) {
       state.status = 'break';
       state.isBreak = true;
+      state.breakStartTime = new Date().toISOString();
 
       // Check if long break is due
       // We check if sets > 0 and mod is 0. 
@@ -421,6 +425,7 @@ const pomodoroSlice = createSlice({
     reset(state) {
       state.status = 'idle';
       state.isBreak = false;
+      state.breakStartTime = null;
       state.remainingSeconds = state.customFocusMinutes * 60;
       state.activeSession = null;
       state.linkedTodoId = null;
@@ -611,6 +616,7 @@ export const selectPomodoroStatus = (state: RootState) => state.pomodoro.status;
 export const selectRemainingSeconds = (state: RootState) => state.pomodoro.remainingSeconds;
 export const selectActiveSession = (state: RootState) => state.pomodoro.activeSession;
 export const selectIsBreak = (state: RootState) => state.pomodoro.isBreak;
+export const selectBreakStartTime = (state: RootState) => state.pomodoro.breakStartTime;
 export const selectTodayFocusMinutes = (state: RootState) => state.pomodoro.todayFocusMinutes;
 export const selectWeekFocusMinutes = (state: RootState) => state.pomodoro.weekFocusMinutes;
 export const selectWeekDailyBreakdown = (state: RootState) => state.pomodoro.weekDailyBreakdown;

@@ -93,21 +93,21 @@ const FocusScreen = () => {
       label: 'Focus',
       duration: settings.focusDuration,
       icon: 'flash',
-      gradient: [colors.dark.accentBlueMuted + '33', colors.dark.accentBlue + '1A'],
+      gradient: [colors.dark.surface, colors.dark.surface],
     },
     {
       type: 'short_break',
       label: 'Short Break',
       duration: settings.shortBreakDuration,
       icon: 'cafe',
-      gradient: [colors.dark.success + '33', colors.dark.success + '1A'],
+      gradient: [colors.dark.surface, colors.dark.surface],
     },
     {
       type: 'long_break',
       label: 'Long Break',
       duration: settings.longBreakDuration,
       icon: 'leaf',
-      gradient: [colors.dark.warning + '33', colors.dark.warning + '1A'],
+      gradient: [colors.dark.surface, colors.dark.surface],
     },
   ], [settings.focusDuration, settings.shortBreakDuration, settings.longBreakDuration]);
 
@@ -154,15 +154,6 @@ const FocusScreen = () => {
 
   return (
     <View style={styles.container}>
-      {/* Deep Blue Background Glow */}
-      <View style={StyleSheet.absoluteFill}>
-        <LinearGradient
-          colors={['rgba(30,58,138,0.15)', 'transparent']}
-          style={[styles.backgroundMesh, { height: '60%' }]}
-          start={{ x: 0.5, y: 0 }}
-          end={{ x: 0.5, y: 1 }}
-        />
-      </View>
 
       {/* Hero Header */}
       <View style={[styles.header, { paddingTop: insets.top + spacing.xl }]}>
@@ -183,9 +174,9 @@ const FocusScreen = () => {
         ]}
         showsVerticalScrollIndicator={false}
       >
-        {/* Timer Section - Glowing Ring */}
+        {/* Timer Section - Minimal Ring */}
         <Animated.View style={styles.timerSection}>
-          <View style={styles.timerGlowContainer}>
+          <View style={styles.timerContainer}>
             <PomodoroTimer
               workDuration={settings.focusDuration}
               breakDuration={settings.shortBreakDuration}
@@ -195,7 +186,7 @@ const FocusScreen = () => {
           </View>
         </Animated.View>
 
-        {/* Session Types - Vibrant Glass Cards */}
+        {/* Session Types - Clean Cards */}
         {!activeSession && (
           <Animated.View>
             <Text style={styles.sectionHeader}>Start Session</Text>
@@ -205,21 +196,15 @@ const FocusScreen = () => {
                 style={[styles.sessionCard, styles.focusCard]}
                 onPress={() => handleSelectSession(sessionOptions[0])}
               >
-                <LinearGradient
-                  colors={sessionOptions[0].gradient as any}
-                  style={StyleSheet.absoluteFill}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                />
                 <View style={styles.sessionIconContainer}>
-                  <Ionicons name="flash" size={24} color={colors.dark.onAccentBlue} />
+                  <Ionicons name="flash" size={24} color={colors.dark.text} />
                 </View>
                 <View>
                   <Text style={styles.sessionLabel}>Focus</Text>
                   <Text style={styles.sessionDuration}>{settings.focusDuration} min</Text>
                 </View>
                 <View style={styles.playIcon}>
-                  <Ionicons name="play" size={16} color={colors.dark.background} />
+                  <Ionicons name="play" size={16} color={colors.dark.text} />
                 </View>
               </Pressable>
 
@@ -231,14 +216,8 @@ const FocusScreen = () => {
                     style={styles.breakCard}
                     onPress={() => handleSelectSession(option)}
                   >
-                    <LinearGradient
-                      colors={option.gradient as any}
-                      style={StyleSheet.absoluteFill}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 1 }}
-                    />
                     <View style={styles.breakContent}>
-                      <Ionicons name={option.icon} size={18} color="rgba(255,255,255,0.8)" />
+                      <Ionicons name={option.icon} size={18} color={colors.dark.textSecondary} />
                       <Text style={styles.breakLabel}>{option.label}</Text>
                     </View>
                     <Text style={styles.breakDuration}>{option.duration}m</Text>
@@ -361,12 +340,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: spacing.md,
   },
-  timerGlowContainer: {
-    shadowColor: "#3b82f6",
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.3,
-    shadowRadius: 20,
-    elevation: 10,
+  timerContainer: {
+    marginVertical: spacing.md,
   },
   sessionGrid: {
     flexDirection: 'row',
@@ -377,7 +352,8 @@ const styles = StyleSheet.create({
     borderRadius: radii.xl,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: colors.dark.border,
+    backgroundColor: colors.dark.surface,
   },
   focusCard: {
     flex: 1.2,
@@ -388,7 +364,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 14,
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: 'rgba(255,255,255,0.05)',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -402,7 +378,7 @@ const styles = StyleSheet.create({
   sessionDuration: {
     fontSize: 14,
     fontFamily: 'Inter_500Medium',
-    color: 'rgba(255,255,255,0.7)',
+    color: colors.dark.textTertiary,
     letterSpacing: -0.1,
   },
   playIcon: {
@@ -412,7 +388,8 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: colors.dark.text,
+    borderWidth: 1,
+    borderColor: colors.dark.border,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -425,7 +402,8 @@ const styles = StyleSheet.create({
     borderRadius: radii.xl,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: colors.dark.border,
+    backgroundColor: colors.dark.surface,
     padding: spacing.md,
     flexDirection: 'row',
     alignItems: 'center',
@@ -439,13 +417,13 @@ const styles = StyleSheet.create({
   breakLabel: {
     fontSize: 14,
     fontFamily: 'Inter_500Medium',
-    color: 'rgba(255,255,255,0.9)',
+    color: colors.dark.textSecondary,
     letterSpacing: -0.1,
   },
   breakDuration: {
     fontSize: 14,
     fontFamily: 'Inter_600SemiBold',
-    color: 'rgba(255,255,255,0.6)',
+    color: colors.dark.textTertiary,
     letterSpacing: -0.1,
   },
   statsRow: {
