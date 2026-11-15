@@ -47,7 +47,7 @@ const persistConfig = {
   version: 1,
   storage: AsyncStorage,
   // Whitelist reducers to persist
-  whitelist: ['auth', 'tasks', 'pomodoro', 'journal', 'settings', 'capabilities', 'sync', 'habits', 'goals', 'timeblocks', 'notes'],
+  whitelist: ['tasks', 'pomodoro', 'journal', 'settings', 'capabilities', 'sync', 'habits', 'goals', 'timeblocks', 'notes'],
   // Blacklist specific keys if needed
   // blacklist: [],
 };
