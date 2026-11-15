@@ -47,7 +47,9 @@ const persistConfig = {
   version: 1,
   storage: AsyncStorage,
   // Whitelist reducers to persist
-  whitelist: ['auth', 'tasks', 'pomodoro', 'journal', 'settings', 'capabilities', 'sync', 'habits', 'goals', 'timeblocks', 'notes'],
+  // NOTE: 'auth' is excluded to prevent persisting sensitive tokens to unencrypted AsyncStorage.
+  // Auth state is restored via Supabase session management on app launch.
+  whitelist: ['tasks', 'pomodoro', 'journal', 'settings', 'capabilities', 'sync', 'habits', 'goals', 'timeblocks', 'notes'],
   // Blacklist specific keys if needed
   // blacklist: [],
 };
